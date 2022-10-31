@@ -1,0 +1,8 @@
+{
+    "output": "U:/Quelltexte/Arduino/vsCode/build",
+    "intelliSenseGen": "disable",
+    "configuration": "FlashFreq=80,UploadSpeed=921600,DebugLevel=info",
+    "board": "esp32:esp32:esp32doit-devkit-v1",
+    "port": "COM3",
+    "sketch": "base01.ino"
+}

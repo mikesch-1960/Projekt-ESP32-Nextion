@@ -1,0 +1,22 @@
+{
+    "C_Cpp.errorSquiggles": "Disabled",
+    "C_Cpp.codeAnalysis.clangTidy.args": [
+      "--extra-arg=-ferror-limit=1"
+    ],
+    "arduino.path": "U:/PortableApps/arduino-1.8.13",
+    "arduino.commandPath": "arduino_debug.exe",
+    "arduino.logLevel": "info",
+    "arduino.allowPDEFiletype": false,
+    "arduino.enableUSBDetection": true,
+    "arduino.disableTestingOpen": false,
+    "arduino.skipHeaderProvider": false,
+    "arduino.additionalUrls": [
+        "https://dl.espressif.com/dl/package_esp32_index.json",
+        "http://arduino.esp8266.com/stable/package_esp8266com_index.json"
+    ],
+    "arduino.defaultBaudRate": 115200,
+    "git.ignoreMissingGitWarning": true,
+    "git.enabled": true,
+    "editor.tabSize": 2,
+    "workbench.editor.enablePreview": false,
+}
