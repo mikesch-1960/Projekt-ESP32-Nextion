@@ -9,7 +9,7 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse, bool showLog=true); //#
 
 // called in the setup function
 void NEX_begin(uint baudrate) {
-  Serial.printf("[NEX] begin...\n");
+  log_i("[NEX] begin...");
   Serial2.begin(baudrate, SERIAL_8N1, NEX_SER_RX, NEX_SER_TX);
 
   NEX_sendCommand("", false);        // send empty command
@@ -39,7 +39,7 @@ bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
 
       if (cntBytes >= buffLen-1) {
         payload[cntBytes-1] = 0;
-        Serial.printf("\nWARN: %s() buffer overflow! max=%llu buf=\"%s\"\n", __func__, buffLen, payload);
+        log_w("\nWARN: buffer overflow! max=%llu buf=\"%s\"", buffLen, payload);
         // Nextions response on an overflow error
         payload[0] = 0x24; payload[1] = 0xFF; payload[2] = 0xFF; payload[3] = 0xFF;
         payload[4] = 0x00;
@@ -65,7 +65,7 @@ bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
 
 
 bool NEX_sendCommand(const char* cmd, bool waitResponse, bool showLog) { //### showLog kann später weg
-  if (showLog) Serial.printf("[NEX] Send '%s' --> \n", cmd);
+  if (showLog) log_d("[NEX] Send '%s' --> ", cmd);
 
   Serial2.print(cmd);
   Serial2.write(0xFF);
@@ -74,17 +74,17 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse, bool showLog) { //### s
 
   uint8_t resp[11];
   if (waitResponse && NEX_readPayload(resp, 10, NEX_CmdRespTimeout)) {
-    // Serial.printf("%s(%X)\n", resp[0] == 1 ? "OK" : "failed", resp[0]);
+    // log_d("%s(%X)", resp[0] == 1 ? "OK" : "failed", resp[0]);
     return resp[0] == 1;
   }
 
-  // Serial.printf("none %s\n", waitResponse?"received!":"expected");
+  // log_d("none %s", waitResponse?"received!":"expected");
   return false;
 }   // sendCommand()
 
 
 void assignConfig(char cfgStr[]) {
-  Serial.println("    assign config...");
+  log_d("    assign config...");
 
   #define CFG_SPLIT ";"
   #define VAL_SPLIT "&"
@@ -98,7 +98,7 @@ void assignConfig(char cfgStr[]) {
     char *tokVal = strtok_r(NULL, VAL_SPLIT, &endTok);
 
     if (tokVal != NULL) { // value specified? If not, use the default, what is allready assigned
-      Serial.printf("     '%s' = '%s'\n", tokNam, (strcmp("WifiPWD", tokNam) != 0) ? tokVal : "*******");
+      log_d("     '%s' = '%s'", tokNam, (strcmp("WifiPWD", tokNam) != 0) ? tokVal : "*******");
 
       if (strcmp("standbyDelay", tokNam) == 0) {
         NEX_cfg.standbyDelay = atoi(tokVal);
@@ -113,10 +113,10 @@ void assignConfig(char cfgStr[]) {
         if (idx >= 0 && idx <=3)
           strncpy(NEX_cfg.fmtTime[idx], tokVal, MAX_FMTPARAM_LEN);
         else
-          Serial.printf("WARNING: %s(): invalid format-makro name fmtTime%d in token '%s'\n", __func__, idx, tok);
+          log_w("WARNING: invalid format-makro name fmtTime%d in token '%s'", idx, tok);
       } else
       {
-        Serial.printf("WARNING: %s(): unhandled setup token '%s'\n", __func__, tok);
+        log_w("WARNING: unhandled setup token '%s'", tok);
       }
     }   // if tokVal
 
@@ -133,22 +133,22 @@ void NEX_handleMsg(uint8_t payload[]) {
   // nextion response to a command that was not handled by NEX_SendCommand()
   if (cntBytes==4 && payload[0]>=0x00 && payload[0]<=0x23) {    // response to a command are in range 0 - 0x23
     if (payload[0] != 0x01)   // command responses is 'OK'
-      Serial.printf("--> Cmd failed: 0x%X\n", payload[0]);
+      log_d("--> Cmd failed: 0x%X", payload[0]);
     // else    // command responses is 'failed'
-    //   Serial.printf("--> Cmd Ok: 0x%X\n", payload[0]);
+    //   log_d("--> Cmd Ok: 0x%X", payload[0]);
     return;
   };
 
   switch (payload[0]) {
 
     case 0x00: { // 00 00 00 FF FF FF - Returned when Nextion has started or reset
-      Serial.println("[Nex] Screen started or reseted!");
+      log_i("[Nex] Screen started or reseted!");
       break;
     }   // case 0x00
 
 
     case 0x88: {  // 88 FF FF FF - Returned when Nextion has powered up and is now initialized successfully
-      Serial.println("[Nex] Screen Ready!");
+      log_i("[Nex] Screen Ready!");
       break;
     }
 
@@ -156,21 +156,21 @@ void NEX_handleMsg(uint8_t payload[]) {
     case 0x70: { // 70 [txt data] FF FF FF - Returned when using get command for a string.
       payload[cntBytes-3] = '\0';   // remove message tail
       dta = (char*)payload+1;
-      Serial.printf("[Nex] Received string data '%s'!\n", dta);
+      log_d("[Nex] Received string data '%s'!", dta);
       break;
     }   // case 0x70
 
 
     case 0x71: {  // 71 [32 bit num value] FF FF FF - Returned when get command to return a number
       int32_t num = hmiIntToInt32(payload, 1);
-      Serial.printf("[Nex] Received numeric data %d!\n", num);
+      log_d("[Nex] Received numeric data %d!", num);
       break;
     }
 
 
     case 0x66: {  // 66 pg FF FF FF - Returned when sendme (send page) is set to 1
       uint8_t pg = (uint8_t)payload[1];
-      // Serial.printf("[Nex] Received page %d from sendme!\n", pg);
+      // log_d("[Nex] Received page %d from sendme!", pg);
       break;
     }
 
@@ -185,7 +185,7 @@ void NEX_handleMsg(uint8_t payload[]) {
       } else {
         PG_touch.released(x, y);
       }
-      Serial.printf("[TOUCH] Received %s at %d,%d from sendXY!\n", s?"pressed":"released", x, y);
+      log_d("[TOUCH] Received %s at %d,%d from sendXY!", s?"pressed":"released", x, y);
       break;
     }
 
@@ -196,7 +196,7 @@ void NEX_handleMsg(uint8_t payload[]) {
       if (strcmp("SR", msgId) == 0) {   // screen init - called in 'Program.s' of HMI-file
         payload[cntBytes-3] = '\0';     // remove message tail
         dta = (char*)payload + 3;       // skip header
-        Serial.println("[NEX] screen init.");
+        log_i("[NEX] screen init.");
 
         assignConfig(dta);
       } else
@@ -211,7 +211,7 @@ void NEX_handleMsg(uint8_t payload[]) {
 
       if (strcmp("PE", msgId) == 0) {   // page enter - called on page postinitialize
         // nothing to do
-        // Serial.printf("[NEX] msg: enter page\n");
+        // log_d("[NEX] msg: enter page");
       } else
 
 
@@ -229,7 +229,7 @@ void NEX_handleMsg(uint8_t payload[]) {
           }
           // $$$ here can be implemented more with other ids!
           default:
-            Serial.printf("[NEX] Unhandled custom message '%s'\n", payload);
+            log_w("[NEX] Unhandled custom message '%s'", payload);
         }
       } else
 
@@ -240,11 +240,11 @@ void NEX_handleMsg(uint8_t payload[]) {
           case '2':   { NEX_sendCommand("t0.txt=\"Ich bin's\"", true);  break; }
           case '3':   {
             if (WiFi.status() == WL_CONNECTED) {
-              Serial.printf("[WIFI] Disconnect...");
+              log_d("[WIFI] Disconnect...");
               wifiMgr.disconnect();
             }
             else {
-              Serial.printf("[WIFI] Reconnect...");
+              log_d("[WIFI] Reconnect...");
               // WiFi.mode(WIFI_off);
               WiFi.reconnect();
             }
@@ -265,7 +265,7 @@ void NEX_handleMsg(uint8_t payload[]) {
             break;
           }
           default:
-            Serial.printf("[NEX]### Unhandled temporary tests '%s'\n", payload);
+            log_d("[NEX]### Unhandled temporary tests '%s'", payload);
         }
       } else
       {}
@@ -274,7 +274,7 @@ void NEX_handleMsg(uint8_t payload[]) {
     }   // case NEX_SER_HEAD
 
     default: {
-      Serial.print("[NEX] Unknown cmd '0x");Serial.println(payload[0], HEX);Serial.print(":");
+      log_w("[NEX] Unknown cmd '0x%X:\n\t", payload[0]);
       for (byte i = 0; i < cntBytes; i++) {
         Serial.print(" ");
         Serial.print(payload[i], HEX);

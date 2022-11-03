@@ -169,7 +169,6 @@ struct {    //###
     uppos[0] = x;
     uppos[1] = y;
     uptime = millis();
-Serial.printf(" released: dx=%1 dy=%i t=%i\n", uppos[0]-downpos[0], uppos[1]-downpos[1], uptime-downtime);
   }
 
   void reset() {
@@ -217,7 +216,7 @@ void wifiHandleRange(comp_t* comp) {
     comp->s = atoi(num);
     strncpy(num, comma+1, (rEnd-comma-1));
     comp->e = atoi(num);
-    // Serial.printf("  %s has range %d - %d\n", comp->namPtr, comp->s, comp->e);
+    // log_v("  %s has range %d - %d", comp->namPtr, comp->s, comp->e);
   }
 
   rStart = strstr(comp->paramPtr, "[");
@@ -231,7 +230,7 @@ void wifiHandleRange(comp_t* comp) {
     char num[5] = {0};
     strncpy(num, rStart+1, (rEnd-rStart-1));
     comp->s = atoi(num);
-    // Serial.printf("  %s has index %d\n", comp->namPtr, comp->s);
+    // log_v("  %s has index %d", comp->namPtr, comp->s);
   }
 }   // wifiHandleRange()
 
@@ -242,7 +241,7 @@ void wifiParseParam(comp_t* comp) {
   comp->e     = -1;
 
   if (!comp->paramPtr) {
-    Serial.printf("[PG:ERROR] wifi component '%s' has no param specifying the kind of data!\n", comp->namPtr);
+    log_e("[PG:ERROR] wifi component '%s' has no param specifying the kind of data!", comp->namPtr);
     return;
   }
 
@@ -270,7 +269,7 @@ void wifiParseParam(comp_t* comp) {
     comp->type = 'S';
   } else {
     comp->type = '?';
-    Serial.printf("[PG:ERROR] wifi component '%s' with param '%s' has an unknown data specifier!\n", comp->namPtr, comp->paramPtr);
+    log_e("[PG:ERROR] wifi component '%s' with param '%s' has an unknown data specifier!", comp->namPtr, comp->paramPtr);
   }
 
 }   // wifiParseParam()
@@ -348,16 +347,16 @@ int hasCompname(const char* compName, int startIdx=0) {
 void Page_init(char* pgComplist) {
   memset(PG_upd.compStr, 0, sizeof(PG_upd.compStr));
   strncpy(PG_upd.compStr, pgComplist, MAXLEN_COMPONENT_LIST);
-  Serial.println("[PG] Page init.");
+  log_i("[PG] Page init.");
 
   splitCompStr();
 
   //### log the list of components
-  Serial.println("-----------  componentlist  ---------------");
+  log_v("-----------  componentlist  ---------------");
   for (int i=0; i<PG_upd.compCount; i++) {
-    Serial.printf("  %d: obj='%s' prop='%s'\n", i, PG_upd.compList[i].namPtr, PG_upd.compList[i].paramPtr?PG_upd.compList[i].paramPtr:"null");
+    log_v("  %d: obj='%s' prop='%s'", i, PG_upd.compList[i].namPtr, PG_upd.compList[i].paramPtr?PG_upd.compList[i].paramPtr:"null");
   }
-  Serial.println("-----------  componentlist  ---------------");
+  log_v("-----------  componentlist  ---------------");
 };
 
 
@@ -372,7 +371,7 @@ void Page_exit() {
   memset(PG_upd.compStr, 0, MAXLEN_COMPONENT_LIST);
   PG_upd.reset();
 
-  Serial.println("[nexPG] Page exit");
+  log_i("[nexPG] Page exit");
 };
 
 
@@ -383,8 +382,6 @@ void Page_exit() {
 bool Page_updateTime() {
   char buff[NEX_MAX_NAMELEN+1 + NEX_MAX_TEXTLEN+1] = {0}; // buffer for the command to set the value of the component
   char fmt[MAX_FMTPARAM_LEN+1] = {0};                      // buffer for formats of the value
-
-  // Serial.printf("%s\n", __func__);
 
   int idx = -1;
   do {
@@ -438,8 +435,6 @@ bool Page_updateTime() {
 
 
 bool Page_updateWifi() {
-  // Serial.printf("----- %s start -----\n", __func__);
-
   char buff[NEX_MAX_NAMELEN+1 + NEX_MAX_TEXTLEN+1] = {0}; // buffer for the command to set the value of the component
   char fmt[MAX_FMTPARAM_LEN+1] = {0};                      // buffer for formats of the value
 
@@ -517,10 +512,9 @@ bool Page_updateWifi() {
             strcat(buff, PG_upd.wifi.fixed.snmask.toString().c_str());
           break;
         }
-  Serial.println(WiFi.macAddress());
 /*### M = MAC
   WiFi.BSSID(*bssid);
-  Serial.println(WiFi.macAddress());
+  log_d("%s", WiFi.macAddress());
   const uint8_t bssid[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
   30:AE:A4:07:0D:64 als Text
   %M[0..5] Teilwert als Zahl
@@ -567,6 +561,4 @@ bool Page_updateWifi() {
       NEX_sendCommand(buff, false);   // send the command to set the components value
     }   // if a component was found
   } while (idx >= 0 && idx < PG_upd.compCount);  // while component starts with basename found
-
-  // Serial.printf("----- %s done -----\n\n", __func__);
 };    // Page_updateWifi()

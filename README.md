@@ -1,11 +1,11 @@
 # Projekt-ESP32-Nextion
 Ein C++ Programm für einen ESP32, entwickelt mit VSCode und der Arduino IDE Erweiterung.
-Dies ist mein erstes bei gitHub hochgeladenes Programm. Es fehlt jegliche Beschreibung oder Dokumentation.
-Ich muss mich noch in github, git und vsCode mit git einarbeiten. Auch markdown ist für mich noch ein schwarzes Loch. Im Moment habe ich einfach alles was ich bisher lokal hatte in dieses repository geladen.
+Dies ist mein erstes bei github hochgeladenes Programm. Es fehlt jegliche Beschreibung oder Dokumentation.
+Ich muss mich noch in github, git und vsCode mit git einarbeiten. Im Moment habe ich einfach alles was ich bisher lokal hatte in dieses repository geladen.
 
 ## Vorgeschichte
 Da ich jemand bin der gerne mal etwas kauft nur um es auszuprobieren oder auseinander zu nehmen, bin ich auf das NSPanel von Sonoff gestoßen. Ich wollte damit probieren, ob und wie es sich in meinen [iobroker](https://www.iobroker.net/) integrieren ließe. Ich bin dann ziemlich schnell zu [dieser](https://github.com/joBr99/nspanel-lovelace-ui) Seite gekommen und habe damit begonnen alles wie dort beschrieben einzurichten. Doch schon bald habe ich für mich entschieden, das dabei zu viele Vorbedingungen im iobroker zu installieren und einzurichten sind und das ganze System extrem starr ist.
-Also begann ich damit mich mit dem Display und der Schnittstelle dazu zu befassen. Nach vielen Stunden suchen, lesen und basteln habe ich dann begonnen kleine Testprogramme zu schreiben und mich entschieden eine eigene Firmware für den ESP32 zu entwickeln. Dabei soll soviel wie möglich über die HMI-Datei des Displays geregelt werden.
+Also begann ich damit mich mit dem Display und der Schnittstelle dazu zu befassen. Nach vielen Stunden suchen, lesen und basteln habe ich dann begonnen kleine Testprogramme zu schreiben und mich entschieden eine eigene Firmware für den ESP32 zu entwickeln. Dabei soll soviel wie möglich über die HMI-Datei des Displays geregelt/konfiguriert werden.
 Die HMI-Datei habe ich mit dem [Nextion-Editor](https://nextion.tech/nextion-editor/) 1.63.3 entwickelt.
 
 ## Ziel des Programms

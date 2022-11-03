@@ -11,6 +11,7 @@ void NTP_begin(char* server, char* tzCfg) {
   configTime(0, 0, server); // 0, 0 because we will use TZ in the next line
   setenv("TZ", tzCfg, 1); // Set environment variable with your time zone
   tzset();
+  log_i("NTP initialized!\n");
 }
 
 
