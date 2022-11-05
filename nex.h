@@ -3,7 +3,7 @@
 #include "nexGlobals.h"
 
 // forward deklarations
-bool NEX_sendCommand(const char* cmd, bool waitResponse, bool showLog=true); //### showLog kann später weg
+bool NEX_sendCommand(const char* cmd, bool waitResponse);
 
 #include "page.h"
 
@@ -18,13 +18,14 @@ void NEX_begin(uint baudrate) {
 }   // init()
 
 
-// Converts an little endian integer (4 bytes) from the nextion display to an uint32_t
+// Converts an little endian integer (4 bytes) from the nextion display to an int32_t
 int32_t hmiIntToInt32(byte arr[], uint8_t start) {
   // numeric value sent in 4 byte 32-bit little endian order
   return int32_t(arr[start+0]) | int32_t(arr[start+1]<<8) | int32_t(arr[start+2]<<16) | int32_t(arr[start+3]<<24);
 }
 
 
+// Read data from the nextion display if available
 bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
   uint8_t buff[1];
   int cntBytes = 0, cntFF = 0;
@@ -61,11 +62,11 @@ bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
   }   // while in time
 
   return false;
-}
+}   // NEX_readPayload()
 
 
-bool NEX_sendCommand(const char* cmd, bool waitResponse, bool showLog) { //### showLog kann später weg
-  if (showLog) log_d("[NEX] Send '%s' --> ", cmd);
+bool NEX_sendCommand(const char* cmd, bool waitResponse) {
+  log_v("[NEX] Send '%s' --> ", cmd);
 
   Serial2.print(cmd);
   Serial2.write(0xFF);
@@ -74,15 +75,37 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse, bool showLog) { //### s
 
   uint8_t resp[11];
   if (waitResponse && NEX_readPayload(resp, 10, NEX_CmdRespTimeout)) {
-    // log_d("%s(%X)", resp[0] == 1 ? "OK" : "failed", resp[0]);
+    log_v("cmd '%s' %s(%X)", cmd, resp[0] == 1 ? "OK" : "failed", resp[0]);
     return resp[0] == 1;
   }
 
-  // log_d("none %s", waitResponse?"received!":"expected");
+  // log_v("none %s", waitResponse?"received!":"expected");
   return false;
-}   // sendCommand()
+}   // NEX_sendCommand()
 
 
+// get the content of a nextion integer variable
+int32_t NEX_getInt(char* varname) {
+  size_t len = NEX_MAX_TEXTLEN+4;
+  char buff[len+1] = {0};
+
+  // send the command to get the value of the variable
+  sprintf(buff, "get %s", varname);
+  NEX_sendCommand(buff, true);
+
+  memset(buff, 0, len);   // clear to reuse
+
+  if (NEX_readPayload((uint8_t*)buff, len, 100)) {            // wait 100ms for a response
+    if (buff[0] == 0x71) {    // response with data of the var : 71 [32 bit num value] FF FF FF
+      return (int32_t)buff[1] + (int32_t)(buff[2]*256) + (int32_t)(buff[3]*65536) + (int32_t)(buff[4]*16777216);
+      // return (int32_t)buff[1] | (int32_t)(buff[2]<<8) | (int32_t)(buff[3]<<16) | (int32_t)(buff[4]<<24);
+    }
+  }
+  return -1;
+}   // NEX_getInt()
+
+
+// assign the config comming from the nextion's Program.s, when nextion is rebooting
 void assignConfig(char cfgStr[]) {
   log_d("    assign config...");
 
@@ -153,7 +176,7 @@ void NEX_handleMsg(uint8_t payload[]) {
     }
 
 
-    case 0x70: { // 70 [txt data] FF FF FF - Returned when using get command for a string.
+    case 0x70: { // 70 [txt data] FF FF FF - Returned when using 'get' command for a string.
       payload[cntBytes-3] = '\0';   // remove message tail
       dta = (char*)payload+1;
       log_d("[Nex] Received string data '%s'!", dta);
@@ -161,31 +184,26 @@ void NEX_handleMsg(uint8_t payload[]) {
     }   // case 0x70
 
 
-    case 0x71: {  // 71 [32 bit num value] FF FF FF - Returned when get command to return a number
+    case 0x71: {  // 71 [32 bit num value] FF FF FF - Returned when 'get' command to return a number
       int32_t num = hmiIntToInt32(payload, 1);
       log_d("[Nex] Received numeric data %d!", num);
       break;
     }
 
 
-    case 0x66: {  // 66 pg FF FF FF - Returned when sendme (send page) is set to 1
+    case 0x66: {  // 66 pg FF FF FF - Returned when 'sendme' (send page id) is set to 1
       uint8_t pg = (uint8_t)payload[1];
       // log_d("[Nex] Received page %d from sendme!", pg);
       break;
     }
 
 
-    case 0x67: {  // 68 x x y y s FF FF FF - Returned when sendxy (touchevents) is set to 1
+    case 0x67: {  // 68 x x y y s FF FF FF - Returned when 'sendxy' (touchevents) is set to 1
+      // Hint: https://unofficialnextion.com/t/how-to-implement-swipe-up-down-using-sendxy/1383
       // coordinates are in 16 bit big endian order
-      int16_t x = (int16_t)(payload[1]<<8) | (int16_t)payload[2];
-      int16_t y = (int16_t)(payload[3]<<8) | (int16_t)payload[4];
-      bool     s = payload[5] == 1;
-      if (s) {
-        PG_touch.pressed(x, y);
-      } else {
-        PG_touch.released(x, y);
-      }
-      log_d("[TOUCH] Received %s at %d,%d from sendXY!", s?"pressed":"released", x, y);
+      int32_t x = (int32_t)(payload[1]<<8) | (int32_t)payload[2];
+      int32_t y = (int32_t)(payload[3]<<8) | (int32_t)payload[4];
+      bool prsd = payload[5] == 1;
       break;
     }
 
@@ -209,22 +227,16 @@ void NEX_handleMsg(uint8_t payload[]) {
       } else
 
 
-      if (strcmp("PE", msgId) == 0) {   // page enter - called on page postinitialize
-        // nothing to do
-        // log_d("[NEX] msg: enter page");
-      } else
-
-
       if (strcmp("PL", msgId) == 0) {   // page leave - called on page exit
         Page_exit();
       } else
 
 
       if (strcmp("CM", msgId) == 0) {   // custom message - called by buttons of a page
-        switch ((char)payload[3]) {    // id of that message
+        switch ((char)payload[3]) {     // id of that message
           case 'B': {
             wifiMgr.reboot();
-            delay(200);
+            delay(1000);
             break;
           }
           // $$$ here can be implemented more with other ids!
@@ -234,11 +246,11 @@ void NEX_handleMsg(uint8_t payload[]) {
       } else
 
 
-      if (strcmp("TT", msgId) == 0) {   //### Temporary tests - used on page `pgTest1`
-        switch ((char)payload[3]) {    // id of that message
+      if (strcmp("TT", msgId) == 0) {   //### Temporary tests - used on page 'pgTest1'
+        switch ((char)payload[3]) {     // id of that message
           case '1':   { NEX_sendCommand("t0.txt=\"I'am ESP\"", true);  break; }
           case '2':   { NEX_sendCommand("t0.txt=\"Ich bin's\"", true);  break; }
-          case '3':   {
+          case '3':   {   // toggle wifi connection
             if (WiFi.status() == WL_CONNECTED) {
               log_d("[WIFI] Disconnect...");
               wifiMgr.disconnect();
@@ -265,7 +277,7 @@ void NEX_handleMsg(uint8_t payload[]) {
             break;
           }
           default:
-            log_d("[NEX]### Unhandled temporary tests '%s'", payload);
+            log_d("[NEX]### Unhandled temporary test id '%s'", payload);
         }
       } else
       {}
@@ -283,21 +295,3 @@ void NEX_handleMsg(uint8_t payload[]) {
     }
   }   // switch payload[0]
 }   // NEX_handleMsg()
-
-
-int NEX_getVar(char* varname) {
-  size_t len = NEX_MAX_TEXTLEN+4;
-  char buff[len+1] = {0};
-
-  sprintf(buff, "get %s", varname);
-  NEX_sendCommand(buff, false, false);
-
-  memset(buff, 0, len);
-  if (NEX_readPayload((uint8_t*)buff, len, 100)) {
-    uint8_t typeId = strHas(varname, ".txt") ? 0x70 : 0x71;
-    if (buff[0] == typeId) {  // returned data off var
-
-    } else
-      NEX_handleMsg((uint8_t*)buff);
-  }
-}   // NEX_getInt()

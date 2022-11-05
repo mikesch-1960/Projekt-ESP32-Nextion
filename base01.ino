@@ -1,24 +1,25 @@
 /*
   In dieser Version: -----
-  - Komunikation zwischen ESP und Display
+  - Kommunikation zwischen ESP und Display
   - Mit WifiManager und NTP
   - Die im 'page init event' gemeldeten _timeXYZ Komponenten werden automatisch beim Minuten-/oder Sekundenwechsel aktualisiert, abhängig davon ob im Format ein Sekunden Bezeichner enthalten ist.
   - Die im 'page init event' gemeldeten _wifiXYZ Komponenten werden automatisch aktualisiert
-  - Format Makros: 'Program.s' kann im 'config event' bis zu 4 Formate (fmtTime0-3) für _time Komponenten definieren. Diese werden im 'page init event' mit #0-#3 addressiert. Die Angabe muss die einzige im param sein. Z.B. `_timeM1&#1;` use fmtTime1
+  - Format Makros: 'Program.s' kann im 'config event' bis zu 4 Formate (fmtTime0-3) für _time Komponenten definieren. Diese werden im 'page init event' mit #0-#3 addressiert. Die Angabe muss die einzige im param sein. Z.B. `_timeM1&#1;` // use first timeformat macro
   - Baudrate zum Nextion Display wurde auf die höchst mögliche gesetzt (921600), dass muss in der HMI Datei im 'Program.s' Skript auch so eingestellt sein.
   - Serial.printf ersetzt durch log_e/w/i/d/v. https://thingpulse.com/esp32-logging/
 
   Todos: -----
-  - LongTouch und swipe im ESP steuern
+  x LongTouch und swipe im ESP steuern
   - Wenn Wifi ausfällt: Reconnect ohne Config Portal wenn schon mal ok war. Wann Config Portal?
   - Async WifiManager
-  - Testen ob die zusätzl. Parameter des WiFiMgr automatisch gespeichert werden und einen Restart überleben
+  - Testen ob die zusätzlichen Parameter des WiFiMgr automatisch gespeichert werden und einen Restart überleben
 
   Ideen: -----
-  - Im Screen sendxy aktivieren und hier die dadurch gesendeten touch Ereignisse für longPress und swipe auswerten.
+  x Im Screen sendxy aktivieren und hier die dadurch gesendeten touch Ereignisse für longPress und swipe auswerten.
     Hier wird dann ein Kommando abgesetzt, das entsprechende globale Variablen im Screen setzt, die dort dann beim release ausgewertet werden können.
     Problem: sendxy sendet immer nur die 'pressed' Koordinate!
-  - Bei den Parametern zu den _wifi Koponenten eine 'echte' Formatangabe wie '%R dBa' machen können.
+    !Ich gebe auf und bleibe dabei das Wischen in den einzelnen Seiten zu machen, da (zumindest bei meinem Nextion) kein Ereignis die Koordinaten beim loslassen sendet.
+  - Bei den Parametern zu den _wifi Komponenten eine 'echte' Formatangabe wie '%R dBa' machen können.
 
   Interessante Infos
   . zu WiFI:
@@ -147,7 +148,6 @@ void setup() {
   }
 
   log_i("[ESP] Setup Done! Entering loop...");
-  log_d("START #%u text %s", 58448, "xyz test");
 }
 
 
@@ -178,6 +178,11 @@ void loop() {
       if ((char)payload[0]=='B')   wifiMgr.reboot();      // reboot ESP
       else
       if ((char)payload[0]=='R')   NEX_sendCommand("rest", false);    // reboot Screen
+      else
+      if ((char)payload[0]=='T')   {
+        int32_t x = NEX_getInt("tch2");
+        log_d("### getInt returns %d", x);
+      }
     }
   }   // ESP Serial available
 

@@ -150,21 +150,21 @@ PG_upd;
 struct {    //###
   byte state = 0;
 
-  int  downpos[2] = {0};
+  int32_t  downpos[2] = {0};
   unsigned long downtime = 0;
 
   bool up = false;
-  int  uppos[2] = {0};
+  int32_t  uppos[2] = {0};
   unsigned long uptime = 0;
 
-  void pressed(int x, int y) {
+  void pressed(int32_t x, int32_t y) {
     state = 1;
     downpos[0] = x;
     downpos[1] = y;
     downtime = millis();
   }
 
-  void released(int x, int y) {
+  void released(int32_t x, int32_t y) {
     state = 0;
     uppos[0] = x;
     uppos[1] = y;

@@ -18,27 +18,29 @@
 ### Zeitkomponenten (_time):
   Um im Display Zeiten anzuzeigen müssen die Komponentennamen mit '_time' beginnen. Der Rest des Namens kann Vom Benutzer frei gewählt werden.
   Damit der ESP die zu aktualisierenden Komponenten kennt, müssen diese im oben beschriebenen Befehl der an den ESP gesendet werden muss bekannt gemacht werden. Dazu ein Beispiel:
-  Wir haben eine Seite in der die Uhrzeit und das Datum angezeigt werden soll. Also werden die entsprechenden Text Komponenten _time und _timeDate im Formular erstellt. Der Befehl für den ESP könnte dann so aussehen:
-    prints "<PI",0  // Kennung des Befehls
+  Eine Seite in der die Uhrzeit und das Datum angezeigt werden soll. Also werden die entsprechenden Text Komponenten _time und _timeDate im Formular erstellt. Der Befehl für den ESP könnte dann so aussehen:
+```javascript
+    prints "<PI",0  // Kennung des Befehls 'page init'
     prints "_time.txt&%H%M;_timeDate.txt&%d.%m.%Y;",0  // Liste der Komponenten und das anzuzeigende Format
     printh FF FF FF // Ende des Befehls
-  Die Komponenten würden dem ESP beim Start der Seite bekannt gegeben und dieser würde diese Komponenten dann regelmäßig aktualisieren, indem der ESP das Kommando zum setzen der Inhalte der Komponente an die Seite sendet.
+```
+  Die Komponenten würden dem ESP beim Öffnen der Seite bekannt gegeben und dieser würde diese Komponenten dann regelmäßig aktualisieren, indem der ESP das Kommando zum setzen der Inhalte der Komponente an die Seite sendet.
   Die Daten werden nur dann gesendet, wenn eine Aktualisierung erforderlich ist. Bei Zeitdaten ist dies normalerweise wenn die Minute wechselt. Falls in einem Zeitwert ein Formatbezeichner für eine Sekunde enthalten ist wird auch beim Wechsel der Sekunde aktualisiert.
   Hinter dem Komponentennamen in der Liste wird also das Anzeigeformat angegeben. Die möglichen Formatbezeichner sind [hier](https://help.gnome.org/users/gthumb/unstable/gthumb-date-formats.html.de) alle beschrieben.
-  Es gibt aber auch noch bis zu vier vordefinierte Formatbezeichner in der Konfiguration der HMI Datei. Diese können anstatt eines Formatausdrucks verwendet werden, indem statt eines Formats '#0' - '#3' angegeben wird; Dies ist insbesondere nützlich, wenn auf vielen Seiten eine Zeitkomponente angezeigt werden soll und alle das Selbe Format bekommen sollen. Durch ändern des Formats in der Konfiguration würde dies dann auf allen Seiten umgestellt sein.
+  Es können aber auch noch bis zu vier vordefinierte Formatbezeichner in der Konfiguration der HMI Datei definiert werden. Diese Formatmakros können anstatt eines Formatausdrucks angegeben werden, indem statt eines Zeitformats '#0' - '#3' angegeben wird. Dies ist insbesondere nützlich, wenn auf vielen Seiten eine Zeitkomponente angezeigt werden soll und alle das Selbe Format bekommen sollen. Durch ändern des Formatmakros in der Konfiguration würde dies dann auf allen Seiten umgestellt sein.
   Bei einer Komponente mit dem Namen '_time.txt' muss kein Format angegeben sein. Diese würde dann standardmäßig '#0' verwenden.
 
   ### Wifikomponenten (_wifi):
-  Ähnlich wie bei Zeitkomponenten, nur wird hier als Parameter nicht ein Zeitformat angegeben, sondern ein sogenanntes Datenformat. Dieses bestimmt welche Daten des Wifi dargestellt werden sollen. Mögliche Angaben sind:
+  Ähnlich wie bei Zeitkomponenten, nur wird hier als Parameter nicht ein Zeitformat, sondern ein sogenanntes Datenformat angegeben. Dieses bestimmt welche Daten des Wifi dargestellt werden sollen. Mögliche Angaben sind:
   %N      SSID als Text
   %M todo MAC
   &R      RSSI in dBa (0..-100)
   &Q      Qualität in % (0..100; ab -50=100%)
   &Q<a,b> Qualität im angegebenen Bereich. Kann für die Darstellung von Icons verwendet werden. Z.B. '%Q<4,8>' würde Werte zwischen 4 und 8 zurückgeben.
   %I      Ip im Textformat 'aaa.bbb.ccc.ddd'
-  %G      Gateway ip im Textformat 'aaa.bbb.ccc.ddd'
+  %G      Gateway im Textformat 'aaa.bbb.ccc.ddd'
   %S      Subnetmask im Textformat 'aaa.bbb.ccc.ddd'
-  %I,G,S[n]   Bei Ip Adressen kann mit diese Angabe der n-ter Teil der Ip als Zahl angezeigt werden
+  %I,G,S[n]   Bei Ip Werten kann mit dieser Angabe der n-ter Teil der Ip als Zahl angezeigt werden
 
   Bei den Komponenten kann sogar eine andere Eigenschaft als .txt oder .val verwendet werden. So kann mit Hilfe der .pic Eigenschaft einer Picture Komponente ein der Verbindungsqualität entspreches Icon angezeigt werden. (siehe Beispiel in der pgStandby Seite der HMI-Datei)
 
