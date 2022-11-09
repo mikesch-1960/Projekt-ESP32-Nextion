@@ -7,7 +7,7 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse);
 
 #include "page.h"
 
-// called in the setup function
+// send in HMI-file in the setup function
 void NEX_begin(uint baudrate) {
   log_i("[NEX] begin...");
   Serial2.begin(baudrate, SERIAL_8N1, NEX_SER_RX, NEX_SER_TX);
@@ -74,7 +74,7 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse) {
   Serial2.write(0xFF);
 
   uint8_t resp[11];
-  if (waitResponse && NEX_readPayload(resp, 10, NEX_CmdRespTimeout)) {
+  if (waitResponse && NEX_readPayload(resp, 100, NEX_CmdRespTimeout)) {
     log_v("cmd '%s' %s(%X)", cmd, resp[0] == 1 ? "OK" : "failed", resp[0]);
     return resp[0] == 1;
   }
@@ -84,6 +84,7 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse) {
 }   // NEX_sendCommand()
 
 
+/*  ### not used for now
 // get the content of a nextion integer variable
 int32_t NEX_getInt(char* varname) {
   size_t len = NEX_MAX_TEXTLEN+4;
@@ -103,7 +104,7 @@ int32_t NEX_getInt(char* varname) {
   }
   return -1;
 }   // NEX_getInt()
-
+*/
 
 // assign the config comming from the nextion's Program.s, when nextion is rebooting
 void assignConfig(char cfgStr[]) {
@@ -164,6 +165,15 @@ void NEX_handleMsg(uint8_t payload[]) {
 
   switch (payload[0]) {
 
+    case 0x00:  // Returned when Nextion has started or reset
+    case 0x88:  // Returned when Nextion has powered up and is now initialized successfully
+    case 0x70:  // Returned when using 'get' command for a string.
+    case 0x71:  // Returned when 'get' command to return a number
+    case 0x66:  // Returned when 'sendme' (send page id) is set to 1 (activated)
+    case 0x67:  // Returned when 'sendxy' (touchevents) is set to 1 (activated)
+      break; // ignore these responses
+
+/*  the follawing messages are not required at the moment
     case 0x00: { // 00 00 00 FF FF FF - Returned when Nextion has started or reset
       log_i("[Nex] Screen started or reseted!");
       break;
@@ -191,14 +201,14 @@ void NEX_handleMsg(uint8_t payload[]) {
     }
 
 
-    case 0x66: {  // 66 pg FF FF FF - Returned when 'sendme' (send page id) is set to 1
+    case 0x66: {  // 66 pg FF FF FF - Returned when 'sendme' (send page id) is set to 1 (activated)
       uint8_t pg = (uint8_t)payload[1];
       // log_d("[Nex] Received page %d from sendme!", pg);
       break;
     }
 
 
-    case 0x67: {  // 68 x x y y s FF FF FF - Returned when 'sendxy' (touchevents) is set to 1
+    case 0x67: {  // 68 x x y y s FF FF FF - Returned when 'sendxy' (touchevents) is set to 1 (activated)
       // Hint: https://unofficialnextion.com/t/how-to-implement-swipe-up-down-using-sendxy/1383
       // coordinates are in 16 bit big endian order
       int32_t x = (int32_t)(payload[1]<<8) | (int32_t)payload[2];
@@ -206,12 +216,12 @@ void NEX_handleMsg(uint8_t payload[]) {
       bool prsd = payload[5] == 1;
       break;
     }
-
+ */
 
     case NEX_SER_HEAD: {  // 3C Id1 Id2 data1..n FF FF FF
       char msgId[3] = {(char)payload[1], (char)payload[2], 0};
 
-      if (strcmp("SR", msgId) == 0) {   // screen init - called in 'Program.s' of HMI-file
+      if (strcmp("SR", msgId) == 0) {   // screen restart - send in HMI-file in 'Program.s'
         payload[cntBytes-3] = '\0';     // remove message tail
         dta = (char*)payload + 3;       // skip header
         log_i("[NEX] screen init.");
@@ -220,22 +230,22 @@ void NEX_handleMsg(uint8_t payload[]) {
       } else
 
 
-      if (strcmp("PI", msgId) == 0) {   // page init - called on page preinitialize
+      if (strcmp("PI", msgId) == 0) {   // page init - send in HMI-file on page preinitialize
         payload[cntBytes-3] = '\0';     // remove message tail
         dta = (char*)payload + 3;       // skip header
         Page_init(dta);
       } else
 
 
-      if (strcmp("PL", msgId) == 0) {   // page leave - called on page exit
+      if (strcmp("PL", msgId) == 0) {   // page leave - send in HMI-file on page exit
         Page_exit();
       } else
 
 
-      if (strcmp("CM", msgId) == 0) {   // custom message - called by buttons of a page
+      if (strcmp("CM", msgId) == 0) {   // custom message - send in HMI-file by buttons of a page
         switch ((char)payload[3]) {     // id of that message
           case 'B': {
-            wifiMgr.reboot();
+            wifiMgr.reboot();   // reboot ESP
             delay(1000);
             break;
           }

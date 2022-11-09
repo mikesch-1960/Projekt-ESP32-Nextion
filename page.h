@@ -1,21 +1,21 @@
 struct comp_t {    // one struct for every token in the compStr
   char* namPtr      = nullptr;  // pointer to the objname in the compStr
   char* paramPtr    = nullptr;  // pointer to the parameter of the objname
-  union {
-    bool  hasSec      = false;    // indicates if the format has a second specifier (only for _time components)
+  union {   // extra fields for all kind of components
+    bool  hasSec      = false;    // for _time components, indicates if the format has a second specifier
     struct {                      // the compiled params for _wifi components
-      /*  The page init string parameter for wifi components: ( {} optional )
-        id          wifi data       examples
-        -----------+---------------+------------------------------
-        %N          wifi SSID       '%SSID is %N', '%N'
-        %C          connected       'conn.: %C', '%C'
-        %R          RSSI dBa
-        %Q{<s,e>}   RSSI % {s..e}
-        %I{[0..3]}  IP              'ip is %I', '%I', 'ip tail is %I[3]', '%I[3]'
-        %G{[0..3]}  gateway
-        %S{[0..3]}  subnet mask
+      /*  The page init string parameter for wifi components:
+        id {}=optional  wifi data       examples
+        ---------------+---------------+------------------------------
+        %N              wifi SSID       '%SSID is %N', '%N'
+        %C              connected       'conn.: %C', '%C'
+        %R              RSSI dBa
+        %Q{<s,e>}       RSSI % or in range of {s..e}
+        %I{[0..3]}      IP              'ip is %I', '%I', 'ip tail is %I[3]', '%I[3]'
+        %G{[0..3]}      gateway
+        %S{[0..3]}      subnet mask
       */
-      char type;    // which wifi data
+      char type;      // which wifi data
       int8_t s;       // either: the IP index or the quality range start for picture components
       int8_t e;       // the quality range end for picture components
     };
@@ -79,13 +79,13 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
       IPAddress snmask;         // (%S)
     }
     fixed;
-    struct {
+    struct {    // the last values updated to the components
       unsigned long loopMs = 0;
       int rssi = 999;   // in dBa;  (%R)
       int conn = 9;     // WiFI 1=connected   (%C)
     }
     last;
-    struct {
+    struct {    // current value; is loaded before updating the components
       int rssi;
       int conn;
     }
@@ -117,7 +117,6 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
 
       // Update the fixed values if page is new or wifi connection changed
       if (fresh()) {
-//###        if (WiFi.status() == WL_CONNECTED) {
         if (WiFi.isConnected()) {
           strncpy(fixed.ssid, wifiMgr.getWiFiSSID().c_str(), 32);
           fixed.ipv4   = WiFi.localIP();
@@ -146,42 +145,6 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
   // ESP;
 }
 PG_upd;
-
-struct {    //###
-  byte state = 0;
-
-  int32_t  downpos[2] = {0};
-  unsigned long downtime = 0;
-
-  bool up = false;
-  int32_t  uppos[2] = {0};
-  unsigned long uptime = 0;
-
-  void pressed(int32_t x, int32_t y) {
-    state = 1;
-    downpos[0] = x;
-    downpos[1] = y;
-    downtime = millis();
-  }
-
-  void released(int32_t x, int32_t y) {
-    state = 0;
-    uppos[0] = x;
-    uppos[1] = y;
-    uptime = millis();
-  }
-
-  void reset() {
-    state = 0;
-    uppos[0] = 0;
-    uppos[1] = 0;
-    uptime = 0;
-    downpos[0] = 0;
-    downpos[1] = 0;
-    downtime = 0;
-  }
-}
-PG_touch;
 
 
 /*

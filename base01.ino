@@ -50,7 +50,7 @@ WiFiManagerParameter wmcp_nex_dimHi("nexDimHigh:", "Nextion:\nDim norm.:", "60",
 /*
   NSPanel specific IO-Pins: https://www.kickstarter.com/projects/sonoffnspanel/sonoff-nspanel-smart-scene-wall-switch/posts/3328417
     Pin   IO              Corresponding function
-    7    SENSOR_CAPN     NTC, temperature sensing
+     7    SENSOR_CAPN     NTC, temperature sensing
     16    GPIO27          KEY2
     17    MTMS            KEY1
     23    GPIO0           for flashing firmware
@@ -178,11 +178,13 @@ void loop() {
       if ((char)payload[0]=='B')   wifiMgr.reboot();      // reboot ESP
       else
       if ((char)payload[0]=='R')   NEX_sendCommand("rest", false);    // reboot Screen
-      else
+/* ### only for testing NEX_getInt()
+       else
       if ((char)payload[0]=='T')   {
         int32_t x = NEX_getInt("tch2");
         log_d("### getInt returns %d", x);
       }
+ */
     }
   }   // ESP Serial available
 
