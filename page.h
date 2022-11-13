@@ -167,12 +167,19 @@ bool timeHasSeconds(const char* fmt) {
 
 
 void wifiHandleRange(comp_t* comp) {
-  char* rStart = strstr(comp->paramPtr, "<");
-  char* rEnd   = strstr(comp->paramPtr, ">");
+  char* rStart = strstr(comp->paramPtr, "[");
+  char* rEnd   = strstr(comp->paramPtr, "]");
   char* comma  = strstr(comp->paramPtr, ",");
 
+  // if (
+  //   (rStart == nullptr) || (rEnd == nullptr) ||
+  //   (rStart-2 < comp->paramPtr || rStart[-2] != '%')    // do not belongs to a data-specifier
+  // )
+  //   return;
+
+
   if (
-    (rStart != nullptr) && (rEnd != nullptr) && (comma != nullptr)
+    (comma != nullptr)
     && (rStart-2 >= comp->paramPtr && rStart[-2] == '%')    // belongs to a data-specifier
     && (comma > rStart+1) && (rEnd > comma+1)
   )
@@ -184,15 +191,12 @@ void wifiHandleRange(comp_t* comp) {
     comp->e = atoi(num);
 
     // remove the range specification
-    size_t R = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
-    memmove(rStart, rEnd+1, R);
+    size_t n = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
+    memmove(rStart, rEnd+1, n);
 
     log_d("  %s has range %d - %d param='%s'", comp->namPtr, comp->s, comp->e, comp->paramPtr);
   }
-
-  rStart = strstr(comp->paramPtr, "[");
-  rEnd   = strstr(comp->paramPtr, "]");
-
+  else
   if (
     (rStart != nullptr) && (rEnd != nullptr)
     && (rStart-2 >= comp->paramPtr && rStart[-2] == '%')    // belongs to a data-specifier
@@ -204,8 +208,8 @@ void wifiHandleRange(comp_t* comp) {
     comp->s = atoi(num);
 
     // remove the index specification
-    size_t R = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
-    memmove(rStart, rEnd+1, R);
+    size_t n = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
+    memmove(rStart, rEnd+1, n);
 
     log_d("  %s has index %d param='%s'", comp->namPtr, comp->s, comp->paramPtr);
   }
