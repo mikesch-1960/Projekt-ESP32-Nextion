@@ -19,4 +19,4 @@ Alles was in diesem Programm entwickelt wird, wird zwar mit einer möglicht gro�
 ## Nextion Editor
 Die HMI-Datei habe ich mit dem [Nextion-Editor](https://nextion.tech/nextion-editor/) 1.63.3 entwickelt. Das Display kann mit dem Simulator des Editors ohne vorhandene Hardware getestet werden, wenn die zweite serielle Schnittstelle des ESP über einen FTDI Adapter mit einen zweiten USB Port des PCs verbunden wird.
 Im Nextion Editor wird dazu der Debuger gestartet und darin unten 'User MCU Input' gewählt. Dort muss die Com Schnittstelle des FTDI Adapters gewählt, und die Baudrate auf 921600 (ist in der HMI-Datei so gesetzt) eingestellt werden.
-Dann sollte, wenn der ESP laüft, im debug Fenster des Nextion-Editors im Menü 'Operation'/'Reboot the Simulator' gewählt werden.
+Dann sollte, wenn der ESP laüft, im debug Fenster des Nextion-Editors im Menü 'Operation' / 'Reboot the Simulator' gewählt werden.
