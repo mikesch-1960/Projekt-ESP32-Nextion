@@ -9,10 +9,11 @@ Also begann ich damit mich mit dem Display und der Schnittstelle dazu zu befasse
 
 
 ## Ziel des Programms
-Dieses Programm soll auf möglichst einfache Weise eine Verbindung zu einem Nextion Display herstellen und Daten aus unterschiedlichen Systemen, die der ESP bedienen kann, darstellen und/oder steuern. Bis zu diesem Zeitpunkt (10.2022) habe ich nur das im NSPanel(EU) von Sonoff eingebaute Nextion Display.
+Dieses Programm soll auf möglichst einfache Weise eine Verbindung zu einem Nextion Display herstellen und Daten aus unterschiedlichen Systemen, die der ESP bedienen kann, darstellen und/oder steuern. Bis zu diesem Zeitpunkt (10.2022) habe ich nur das im [NSPanel(EU)](https://haus-automatisierung.com/hardware/sonoff/2021/10/15/sonoff-nspanel-ersteindruck.html) von Sonoff eingebaute Nextion Display.  
+Zum Testen benutze ich im Moment allerding nur den Simulator im debug Modus des Nextion Editors.  
 Um Daten aus dem iobroker lesen und schreiben zu können, sind im iobroker der [MQTT](https://github.com/ioBroker/ioBroker.mqtt) Adapter oder der [REST-API](https://github.com/ioBroker/ioBroker.rest-api) Adapter verfügbar. Ich werde in meinem Projekt mit großer Wahrscheinlichkeit das MQTT Protokoll verwenden.
+
 Alles was in diesem Programm entwickelt wird, wird zwar mit einer möglicht großen allgemeinen Gültigkeit getan ist aber nur auf der mir zur Verfügung stehenden Hardware entwickelt und getestet.
-Ich habe leider keine Zeit für Entwicklungen die mir selber nichts bringen.
 
 ## Nextion Editor
 Die HMI-Datei habe ich mit dem [Nextion-Editor](https://nextion.tech/nextion-editor/) 1.63.3 entwickelt. Das Display kann mit dem Simulator des Editors ohne vorhandenes Nextion Display voll getestet werden, wenn die zweite serielle Schnittstelle des ESP über einen FTDI Adapter mit einen zweiten USB Port des PCs verbunden wird. Im Nextion Editor wird dann der Debuger gestartet und darin unten 'User MCU Input' gewählt. Dort muss dann die Com Schnittstelle des FTDI Adapters gewählt, und die Baudrate auf 921600 eingestellt werden.
