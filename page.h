@@ -171,19 +171,14 @@ void wifiHandleRange(comp_t* comp) {
   char* rEnd   = strstr(comp->paramPtr, "]");
   char* comma  = strstr(comp->paramPtr, ",");
 
-  // if (
-  //   (rStart == nullptr) || (rEnd == nullptr) ||
-  //   (rStart-2 < comp->paramPtr || rStart[-2] != '%')    // do not belongs to a data-specifier
-  // )
-  //   return;
-
-
   if (
-    (comma != nullptr)
-    && (rStart-2 >= comp->paramPtr && rStart[-2] == '%')    // belongs to a data-specifier
-    && (comma > rStart+1) && (rEnd > comma+1)
+    (rStart == nullptr) || (rEnd == nullptr) ||
+    (rStart-2 < comp->paramPtr || rStart[-2] != '%')    // do not belongs to a data-specifier
   )
-  {
+    return;
+
+
+  if ( (comma != nullptr) && (comma > rStart+1) && (rEnd > comma+1) ) {
     char num[5] = {0};
     strncpy(num, rStart+1, (comma-rStart-1));
     comp->s = atoi(num);
@@ -194,15 +189,10 @@ void wifiHandleRange(comp_t* comp) {
     size_t n = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
     memmove(rStart, rEnd+1, n);
 
-    log_d("  %s has range %d - %d param='%s'", comp->namPtr, comp->s, comp->e, comp->paramPtr);
+    // log_d("  %s has range %d - %d param='%s'", comp->namPtr, comp->s, comp->e, comp->paramPtr);  //###
   }
   else
-  if (
-    (rStart != nullptr) && (rEnd != nullptr)
-    && (rStart-2 >= comp->paramPtr && rStart[-2] == '%')    // belongs to a data-specifier
-    && (rEnd > rStart+1)
-  )
-  {
+  if (rEnd > rStart+1) {
     char num[5] = {0};
     strncpy(num, rStart+1, (rEnd-rStart-1));
     comp->s = atoi(num);
@@ -211,7 +201,7 @@ void wifiHandleRange(comp_t* comp) {
     size_t n = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
     memmove(rStart, rEnd+1, n);
 
-    log_d("  %s has index %d param='%s'", comp->namPtr, comp->s, comp->paramPtr);
+    // log_d("  %s has index %d param='%s'", comp->namPtr, comp->s, comp->paramPtr); //###
   }
 }   // wifiHandleRange()
 
