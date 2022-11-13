@@ -19,7 +19,7 @@
     Hier wird dann ein Kommando abgesetzt, das entsprechende globale Variablen im Screen setzt, die dort dann beim release ausgewertet werden können.
     Problem: sendxy sendet immer nur die 'pressed' Koordinate!
     !Ich gebe auf und bleibe dabei das Wischen in den einzelnen Seiten zu machen, da (zumindest bei meinem Nextion) kein Ereignis die Koordinaten beim loslassen sendet.
-  - Bei den Parametern zu den _wifi Komponenten eine 'echte' Formatangabe wie '%R dBa' machen können.
+  v Bei den Parametern zu den _wifi Komponenten eine 'echte' Formatangabe wie '%R dBa' machen können.
 
   Interessante Infos
   . zu WiFI:
@@ -36,7 +36,7 @@
 #define CORE_DEBUG_LEVEL      ARDUHAL_LOG_LEVEL_VERBOSE      // doesn't seem to work!
 // in vscode press F1: 'Arduino: Board Config' to change core debig level
 
-#define strHas(str, what)     strstr(str, what)!=nullptr
+#define strHas(str, what)     (strstr(str, what)!=nullptr)
 
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 WiFiManager wifiMgr;

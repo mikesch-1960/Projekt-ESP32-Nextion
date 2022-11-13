@@ -66,7 +66,7 @@ bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
 
 
 bool NEX_sendCommand(const char* cmd, bool waitResponse) {
-  log_v("[NEX] Send '%s' --> ", cmd);
+  log_d("[NEX] Send '%s' --> ", cmd);
 
   Serial2.print(cmd);
   Serial2.write(0xFF);
@@ -75,11 +75,11 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse) {
 
   uint8_t resp[11];
   if (waitResponse && NEX_readPayload(resp, 100, NEX_CmdRespTimeout)) {
-    log_v("cmd '%s' %s(%X)", cmd, resp[0] == 1 ? "OK" : "failed", resp[0]);
+    log_d("cmd '%s' %s(%X)", cmd, resp[0] == 1 ? "OK" : "failed", resp[0]);
     return resp[0] == 1;
   }
 
-  // log_v("none %s", waitResponse?"received!":"expected");
+  // log_d("none %s", waitResponse?"received!":"expected");
   return false;
 }   // NEX_sendCommand()
 
@@ -262,12 +262,13 @@ void NEX_handleMsg(uint8_t payload[]) {
           case '2':   { NEX_sendCommand("t0.txt=\"Ich bin's\"", true);  break; }
           case '3':   {   // toggle wifi connection
             if (WiFi.status() == WL_CONNECTED) {
-              log_d("[WIFI] Disconnect...");
+              PG_upd.reset();
               wifiMgr.disconnect();
+              log_d("[WIFI] Disconnect...");
             }
             else {
+              PG_upd.reset();
               log_d("[WIFI] Reconnect...");
-              // WiFi.mode(WIFI_off);
               WiFi.reconnect();
             }
             break; }

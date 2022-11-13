@@ -16,6 +16,7 @@ struct comp_t {    // one struct for every token in the compStr
         %S{[0..3]}      subnet mask
       */
       char type;      // which wifi data
+      bool fixed;     // is this data fixed while wifi connected
       int8_t s;       // either: the IP index or the quality range start for picture components
       int8_t e;       // the quality range end for picture components
     };
@@ -29,7 +30,7 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
   comp_t compList[50];
   int compCount = 0;
 
-  void reset() {  // ### als normale methode und resettet dann auch touch!
+  void reset() {
     time.reset();
     wifi.reset();
     compCount = 0;
@@ -98,6 +99,7 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
       last.loopMs  = 0;
       used         = false;
       last.rssi    = 999;
+      last.conn    = 999;
       memset(fixed.ssid, 0, 32);
       fixed.ipv4   = {0, 0, 0, 0};
       fixed.gatewy = {0, 0, 0, 0};
@@ -171,6 +173,7 @@ void wifiHandleRange(comp_t* comp) {
 
   if (
     (rStart != nullptr) && (rEnd != nullptr) && (comma != nullptr)
+    && (rStart-2 >= comp->paramPtr && rStart[-2] == '%')    // belongs to a data-specifier
     && (comma > rStart+1) && (rEnd > comma+1)
   )
   {
@@ -179,7 +182,12 @@ void wifiHandleRange(comp_t* comp) {
     comp->s = atoi(num);
     strncpy(num, comma+1, (rEnd-comma-1));
     comp->e = atoi(num);
-    // log_v("  %s has range %d - %d", comp->namPtr, comp->s, comp->e);
+
+    // remove the range specification
+    size_t R = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
+    memmove(rStart, rEnd+1, R);
+
+    log_d("  %s has range %d - %d param='%s'", comp->namPtr, comp->s, comp->e, comp->paramPtr);
   }
 
   rStart = strstr(comp->paramPtr, "[");
@@ -187,19 +195,26 @@ void wifiHandleRange(comp_t* comp) {
 
   if (
     (rStart != nullptr) && (rEnd != nullptr)
+    && (rStart-2 >= comp->paramPtr && rStart[-2] == '%')    // belongs to a data-specifier
     && (rEnd > rStart+1)
   )
   {
     char num[5] = {0};
     strncpy(num, rStart+1, (rEnd-rStart-1));
     comp->s = atoi(num);
-    // log_v("  %s has index %d", comp->namPtr, comp->s);
+
+    // remove the index specification
+    size_t R = (size_t)comp->paramPtr + strlen(comp->paramPtr) - (size_t)rEnd;
+    memmove(rStart, rEnd+1, R);
+
+    log_d("  %s has index %d param='%s'", comp->namPtr, comp->s, comp->paramPtr);
   }
 }   // wifiHandleRange()
 
 
 void wifiParseParam(comp_t* comp) {
   comp->type  = '0';
+  comp->fixed = true;
   comp->s     = -1;
   comp->e     = -1;
 
@@ -210,31 +225,45 @@ void wifiParseParam(comp_t* comp) {
 
   wifiHandleRange(comp);
 
-  if (strHas(comp->paramPtr, "%N")) {
+// log_d("### PREPARE: comp='%s' parseParam='%s'", comp->namPtr, comp->paramPtr);
+  char* fmt = nullptr;
+
+  if (fmt = strstr(comp->paramPtr, "%N")) {
     comp->type = 'N';
+    fmt[1] = 's';
   } else
-  if (strHas(comp->paramPtr, "%C")) {
-    comp->type = 'C';
+  if (fmt = strstr(comp->paramPtr, "%C")) {
+    comp->type = 'C';   comp->fixed = false;
+    fmt[1] = 'd';
   } else
-  if (strHas(comp->paramPtr, "%R")) {
-    comp->type = 'R';
+  if (fmt = strstr(comp->paramPtr, "%R")) {
+    comp->type = 'R';   comp->fixed = false;
+    fmt[1] = 'd';
   } else
-  if (strHas(comp->paramPtr, "%Q")) {
-    comp->type = 'Q';
+  if (fmt = strstr(comp->paramPtr, "%Q")) {
+    comp->type = 'Q';   comp->fixed = false;
+    fmt[1] = 'd';
   } else
-  if (strHas(comp->paramPtr, "%I")) {
+  if (fmt = strstr(comp->paramPtr, "%I")) {
     comp->type = 'I';
+    fmt[1] = comp->s == -1 ? 's' : 'd';
   } else
-  if (strHas(comp->paramPtr, "%G")) {
+  if (fmt = strstr(comp->paramPtr, "%G")) {
     comp->type = 'G';
+    fmt[1] = comp->s == -1 ? 's' : 'd';
   } else
-  if (strHas(comp->paramPtr, "%S")) {
+  if (fmt = strstr(comp->paramPtr, "%S")) {
     comp->type = 'S';
+    fmt[1] = comp->s == -1 ? 's' : 'd';
   } else {
     comp->type = '?';
     log_e("[PG:ERROR] wifi component '%s' with param '%s' has an unknown data specifier!", comp->namPtr, comp->paramPtr);
   }
 
+  // Number components can only have a %d format to store the value
+  if (!strHas(comp->namPtr, ".txt") && strlen(comp->paramPtr) >= 2)
+    strcpy(comp->paramPtr, "%d");
+// log_d("### PREPARE: done -  fmt=%c type=%c param='%s'", fmt[1], comp->type, comp->paramPtr);
 }   // wifiParseParam()
 
 
@@ -315,19 +344,12 @@ void Page_init(char* pgComplist) {
   splitCompStr();
 
   //### log the list of components
-  log_v("-----------  componentlist  ---------------");
+  log_d("-----------  componentlist  ---------------");
   for (int i=0; i<PG_upd.compCount; i++) {
-    log_v("  %d: obj='%s' prop='%s'", i, PG_upd.compList[i].namPtr, PG_upd.compList[i].paramPtr?PG_upd.compList[i].paramPtr:"null");
+    log_d("  %d: obj='%s' prop='%s'", i, PG_upd.compList[i].namPtr, PG_upd.compList[i].paramPtr?PG_upd.compList[i].paramPtr:"null");
   }
-  log_v("-----------  componentlist  ---------------");
+  log_d("-----------  componentlist  ---------------");
 };
-
-
-//###
-// void Page_addComps(char* pgComplist) {
-// }
-// void Page_removeComps(char* pgComplist) {
-// }
 
 
 void Page_exit() {
@@ -398,29 +420,26 @@ bool Page_updateTime() {
 
 
 bool Page_updateWifi() {
-  char buff[NEX_MAX_NAMELEN+1 + NEX_MAX_TEXTLEN+1] = {0}; // buffer for the command to set the value of the component
-  char fmt[MAX_FMTPARAM_LEN+1] = {0};                      // buffer for formats of the value
+  char buff[NEX_MAX_NAMELEN+1 + NEX_MAX_TEXTLEN+1] = {0};   // buffer for the command to set the value of the component
+  char fmt[MAX_FMTPARAM_LEN+1] = {0};                       // buffer for formats for the value
 
   int idx = -1;
   do {
     idx++;
     idx = hasCompname("_wifi", idx);     // get all components starting with this name
 
-    if (idx >= 0) {   // found component starting with the searched string
-      // this values are not changing while connection status is unchanged
-      if (!PG_upd.wifi.fresh() &&
-          (
-            PG_upd.compList[idx].type == 'N' ||
-            PG_upd.compList[idx].type == 'I' ||
-            PG_upd.compList[idx].type == 'G' ||
-            PG_upd.compList[idx].type == 'S'
-          )
-      )
-      {
+    if (idx >= 0) {   // found component starting with '_wifi'
+      if (!PG_upd.wifi.fresh() && PG_upd.compList[idx].fixed) {
+        // this values are not changing while wifi-connection status is unchanged
         continue;
       }
 
-      bool isTxt  = strHas(PG_upd.compList[idx].namPtr, ".txt");   // is it of type text?
+      bool isTxt  = strHas(PG_upd.compList[idx].namPtr, ".txt");   // is component of type text?
+
+// log_d("### SET: comp='%s' isTxt=%d fmt='%s' type=%c fix=%d, s=%d e=%d",
+    // PG_upd.compList[idx].namPtr, (int)isTxt, PG_upd.compList[idx].paramPtr,
+    // PG_upd.compList[idx].type, PG_upd.compList[idx].fixed, PG_upd.compList[idx].s, PG_upd.compList[idx].e);
+
 
       sprintf(buff, "%s=", PG_upd.compList[idx].namPtr);
       if (isTxt) strcat(buff, "\"");
@@ -428,7 +447,7 @@ bool Page_updateWifi() {
       // Handel the type of data the component wants to show
       switch (PG_upd.compList[idx].type) {
 
-        // the component has a parameter with an unknown data spicifier
+        // the component has a parameter with an unknown data specifier
         case '?': {     // detected in wifiParseParam()
           if (isTxt)
             strcat(buff, "ERR");
@@ -437,7 +456,7 @@ bool Page_updateWifi() {
           break;
         }
 
-        // the component has no parameter with a data spicifier
+        // the component has no parameter with a data specifier
         case '0': {     // detected in wifiParseParam()
           if (isTxt)
             strcat(buff, "NUL");
@@ -446,33 +465,34 @@ bool Page_updateWifi() {
           break;
         }
 
-        // Following values changing while connected to wifi
+        /**** Following values do not change while connected to wifi ***/
+
         case 'N': {
-          strcat(buff, PG_upd.wifi.fixed.ssid);
+          sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.ssid);
           break;
         }
         case 'I': {
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) ) {
+          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) )
             // Only one Part of the ip should be used.
-            sprintf(buff+strlen(buff), "%d",PG_upd.wifi.fixed.ipv4[PG_upd.compList[idx].s]);
-          } else
-            strcat(buff, PG_upd.wifi.fixed.ipv4.toString().c_str());
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.ipv4[PG_upd.compList[idx].s]);
+          else
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.ipv4.toString().c_str());
           break;
         }
         case 'G': {
           // Only one Part of the gateway ip should be used.
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) ) {
-            sprintf(buff+strlen(buff), "%d",PG_upd.wifi.fixed.gatewy[PG_upd.compList[idx].s]);
-          } else
-            strcat(buff, PG_upd.wifi.fixed.gatewy.toString().c_str());
+          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) )
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.gatewy[PG_upd.compList[idx].s]);
+          else
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.gatewy.toString().c_str());
           break;
         }
         case 'S': {
           // Only one Part of the subnet mask should be used.
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) ) {
-            sprintf(buff+strlen(buff), "%d",PG_upd.wifi.fixed.snmask[PG_upd.compList[idx].s]);
-          } else
-            strcat(buff, PG_upd.wifi.fixed.snmask.toString().c_str());
+          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) )
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.snmask[PG_upd.compList[idx].s]);
+          else
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.snmask.toString().c_str());
           break;
         }
 /*### M = MAC
@@ -482,19 +502,25 @@ bool Page_updateWifi() {
   30:AE:A4:07:0D:64 als Text
   %M[0..5] Teilwert als Zahl
 */
-        // Following values changing while connected to wifi
+
+        /**** Following values changing while connected to wifi ***/
+
         case 'C': {
+          // log_d("  type C: new=%d", PG_upd.wifi.newRSSI());//###
+
           if (!PG_upd.wifi.newConn() )  continue;
-          sprintf(buff+strlen(buff), "%d", PG_upd.wifi.curr.conn);
+
+          // log_d("    fmt=%s val=%d", PG_upd.compList[idx].paramPtr, PG_upd.wifi.curr.conn);//###
+          sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.curr.conn);
           break;
         }
         case 'R': {
           if (!PG_upd.wifi.newRSSI() )  continue;
-          sprintf(buff+strlen(buff), "%d", PG_upd.wifi.curr.rssi);
+          sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.curr.rssi);
           break;
         }
         case 'Q': {
-          if (!PG_upd.wifi.newRSSI())  continue;
+          if (!PG_upd.wifi.newRSSI())   continue;
 
           float Q = 0.0;
           // rssi is zero if wifi not connected!
@@ -509,11 +535,13 @@ bool Page_updateWifi() {
               -100 dBm ≤ RSSI ≤ -50 dBm => quality ~= 2 x (RSSI + 100)
           */
           if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].e >= 0)) {    // use a range instaed of %
+            // log_d("   Q rng  fmt=%s", PG_upd.compList[idx].paramPtr);//###
             int   r = PG_upd.compList[idx].e - PG_upd.compList[idx].s + 1;
             float v = constrain(Q * r / 100, PG_upd.compList[idx].s, PG_upd.compList[idx].e);
-            sprintf(buff+strlen(buff), "%d", (int)v + PG_upd.compList[idx].s);
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, (int)v + PG_upd.compList[idx].s);
           } else {
-            sprintf(buff+strlen(buff), "%d", (int)Q);
+            // log_d("   Q prz  fmt=%s", PG_upd.compList[idx].paramPtr);//###
+            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, (int)Q);
           }
           break;
         }
@@ -521,6 +549,7 @@ bool Page_updateWifi() {
       }   // switch changing wifi data
 
       if (isTxt) strcat(buff, "\"");
+
       NEX_sendCommand(buff, false);   // send the command to set the components value
     }   // if a component was found
   } while (idx >= 0 && idx < PG_upd.compCount);  // while component starts with basename found
