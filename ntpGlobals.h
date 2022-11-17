@@ -6,6 +6,9 @@
 struct {
   time_t now;           // this is the epoch
   tm timeinfo;          // the structure tm holds time information in a more convenient way
+
+  char ntpServername[50];
+  char ntpTimezone[50];
 }
 NTP_store;
 

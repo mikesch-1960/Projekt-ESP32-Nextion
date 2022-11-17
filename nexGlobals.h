@@ -13,13 +13,8 @@
 #define NEX_SER_RX              16      // RX pin for connecting to the TX pin of the Nextion
 #define NEX_SER_TX              17      // TX pin for connecting to the RX pin of the Nextion
 
-/*
-  Self defined Return Codes
-*/
-  // Testing messages from Nextion
-#define NEX_TEST_MSG      0x24   // 0x24 id 0xFF 0xFF 0xFF
   // Messages from Nextion to this program
-#define NEX_SER_HEAD      0x3C   // 0x3C  This is used in the HMI file. Do not change!
+#define NEX_MSG_HEAD      0x3C   // 0x3C  This is used in the HMI file. Do not change!
 
 #define MAX_FMTPARAM_LEN  30      // max length of default format for _time.txt
 

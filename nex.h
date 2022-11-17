@@ -66,7 +66,7 @@ bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
 
 
 bool NEX_sendCommand(const char* cmd, bool waitResponse) {
-  log_d("[NEX] Send '%s' --> ", cmd);
+  log_d("[NEX] Send '%s'", cmd);
 
   Serial2.print(cmd);
   Serial2.write(0xFF);
@@ -218,7 +218,7 @@ void NEX_handleMsg(uint8_t payload[]) {
     }
  */
 
-    case NEX_SER_HEAD: {  // 3C Id1 Id2 data1..n FF FF FF
+    case NEX_MSG_HEAD: {  // 3C Id1 Id2 data1..n FF FF FF
       char msgId[3] = {(char)payload[1], (char)payload[2], 0};
 
       if (strcmp("SR", msgId) == 0) {   // screen restart - send in HMI-file in 'Program.s'
@@ -261,28 +261,31 @@ void NEX_handleMsg(uint8_t payload[]) {
           case '1':   { NEX_sendCommand("t0.txt=\"I'am ESP\"", true);  break; }
           case '2':   { NEX_sendCommand("t0.txt=\"Ich bin's\"", true);  break; }
           case '3':   {   // toggle wifi connection
+            PG_upd.reset();
             if (WiFi.status() == WL_CONNECTED) {
-              PG_upd.reset();
+              NEX_sendCommand("t0.txt=\"Disconnect Wifi...\"", true);
               wifiMgr.disconnect();
-              log_d("[WIFI] Disconnect...");
+              log_d("Disconnecting WiFi...");
             }
             else {
-              PG_upd.reset();
-              log_d("[WIFI] Reconnect...");
+              NEX_sendCommand("t0.txt=\"Connect Wifi...\"", true);
+              log_d("Reconnecting WiFi...");
               WiFi.reconnect();
             }
             break; }
-          case 'W':   {
+          case 'C':   {   // prepare ESP to present the configuration portal
             if (WiFi.status() != WL_CONNECTED) {  // WifFi not connected
-              NEX_sendCommand("t0.txt=\"AP for Config started...\"", true);
+              NEX_sendCommand("t0.txt=\"Config Portal started...\"", true);
               // starting an AP to reconfigur the connection settings
               wifiMgr.setConfigPortalBlocking(false);
               wifiMgr.startConfigPortal();
+              log_d("Config Portal started...");
             }
             else {
               // starting an webserver on an existing WiFi connection to reconfigur the connection settings
-              NEX_sendCommand("t0.txt=\"Open ESP ip to config...\"", true);
+              NEX_sendCommand("t0.txt=\"Started webserver...\"", true);
               wifiMgr.startWebPortal();
+              log_d("Started webserver on %s...", PG_upd.wifi.fixed.ipv4);
             }
 
             break;
@@ -294,7 +297,7 @@ void NEX_handleMsg(uint8_t payload[]) {
       {}
 
       break;
-    }   // case NEX_SER_HEAD
+    }   // case NEX_MSG_HEAD
 
     default: {
       log_w("[NEX] Unknown cmd '0x%X:\n\t", payload[0]);

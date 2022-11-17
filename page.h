@@ -5,20 +5,27 @@ struct comp_t {    // one struct for every token in the compStr
     bool  hasSec      = false;    // for _time components, indicates if the format has a second specifier
     struct {                      // the compiled params for _wifi components
       /*  The page init string parameter for wifi components:
-        id {}=optional  wifi data       examples
-        ---------------+---------------+------------------------------
-        %N              wifi SSID       '%SSID is %N', '%N'
-        %C              connected       'conn.: %C', '%C'
-        %R              RSSI dBa
-        %Q{<s,e>}       RSSI % or in range of {s..e}
-        %I{[0..3]}      IP              'ip is %I', '%I', 'ip tail is %I[3]', '%I[3]'
-        %G{[0..3]}      gateway
-        %S{[0..3]}      subnet mask
+        id {}=optional    wifi data       examples
+        -----------------+---------------+------------------------------
+        %N                wifi SSID       'SSID is %N', '%N'
+        %C{[true:false]}  connected       'conn.: %C', '%C', '%C[conn.:disconn.]'
+        %R                RSSI dBa        '%R', '%R dBa'
+        %Q{[s,e]}         RSSI % or in    '%Q', '%Q %'
+                          range of s..e   '%Q[3,7]'
+        %M mac address //### not implemented yet
+        %P captive portal active? //### not implemented yet
+        %I{[0..3]}        IP              'ip is %I', '%I', 'ip tail is %I[3]', '%I[3]'
+        %G{[0..3]}        gateway
+        %S{[0..3]}        subnet mask
       */
-      char type;      // which wifi data
-      bool fixed;     // is this data fixed while wifi connected
-      int8_t s;       // either: the IP index or the quality range start for picture components
-      int8_t e;       // the quality range end for picture components
+      char type;      // determines which wifi data is to be represent in the component
+      bool fixed;     // is this data fixed while wifi connection is unchanged?
+      bool boolFmt;   // has this data a boolean format specifier?
+      //### can we merge this two booleans?
+
+      // for a specifyed index or range
+      int8_t s;       // the index, the range start or the offset to the true part of a boolean format specifier
+      int8_t e;       // the range end or the offset to the false part of a boolean format specifier
     };
   };
 };    // struct comp_t
@@ -38,7 +45,7 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
 
   // ----------  time updates  ----------
   struct {    // time struct - for components starting with _time
-    const unsigned long INTERVAL = 1000;
+    const unsigned long INTERVAL = 1000;    // DO NOT CHANGE!
     bool used     = false;
     tm* timeinfo  = &NTP_store.timeinfo;
 
@@ -73,6 +80,7 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
   struct {    // wifi struct - for components starting with _wifi
     const unsigned long INTERVAL = 9963;
     bool used = false;
+
     struct {  // value not changing while connected to WiFi
       char ssid[32+1] = {0};    // (%N)
       IPAddress ipv4  ;         // (%I)
@@ -140,11 +148,6 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
     }   // next
   }
   wifi;
-
-  // struct {   //###
-  //   //### cpuTemp, HAL, GPIO, ID, extTemp, Relay1 und 2
-  // }
-  // ESP;
 }
 PG_upd;
 
@@ -166,19 +169,38 @@ bool timeHasSeconds(const char* fmt) {
 }
 
 
-void wifiHandleRange(comp_t* comp) {
+void wifiHandleRange(comp_t* comp) {  //### umbenennen in wifi???
   char* rStart = strstr(comp->paramPtr, "[");
   char* rEnd   = strstr(comp->paramPtr, "]");
   char* comma  = strstr(comp->paramPtr, ",");
+  char* colon  = strstr(comp->paramPtr, ":");
 
   if (
-    (rStart == nullptr) || (rEnd == nullptr) ||
+    (rStart == nullptr) || (rEnd == nullptr) ||         // no range or index specified
     (rStart-2 < comp->paramPtr || rStart[-2] != '%')    // do not belongs to a data-specifier
   )
     return;
 
+  // has a boolean text specifier
+  if ( (colon != nullptr) && (colon >= rStart+1) && (rEnd >= colon+1) ) {
+    /* Only allowed for text components and parameter with a logical data-specifier like %C.
+       Truetext and falsetext can be empty. The following steps are done.
+         Set .s to the offset from param to truetext
+         Set .e to the offset from param to falsetext
+         Set the colon and the [] to \0, so truetext and falsetext are seperated strings in between the param.
+       Example:
+         .param = 'wifi is %C[:dis]connected!'
+         after this function .paramPtr is: 'wifi is %C\0\0dis\0connected!'
+         result if wifi is not connected: 'wifi is disconnected!'
+    */
+    comp->boolFmt = true;
+    comp->s = (int)(rStart+1 - comp->paramPtr); // offset from param to truetext
+    comp->e = (int)(colon+1 - comp->paramPtr);  // offset from param to falsetext
 
-  if ( (comma != nullptr) && (comma > rStart+1) && (rEnd > comma+1) ) {
+    rStart[0] = '\0';    rEnd[0]   = '\0';    colon[0]  = '\0';
+  }
+  else
+  if ( (comma != nullptr) && (comma > rStart+1) && (rEnd > comma+1) ) {   // has a range specifier
     char num[5] = {0};
     strncpy(num, rStart+1, (comma-rStart-1));
     comp->s = atoi(num);
@@ -207,10 +229,11 @@ void wifiHandleRange(comp_t* comp) {
 
 
 void wifiParseParam(comp_t* comp) {
-  comp->type  = '0';
-  comp->fixed = true;
-  comp->s     = -1;
-  comp->e     = -1;
+  comp->type    = '0';
+  comp->fixed   = true;
+  comp->e       = -1;
+  comp->s       = -1;
+  comp->boolFmt = false;
 
   if (!comp->paramPtr) {
     log_e("[PG:ERROR] wifi component '%s' has no param specifying the kind of data!", comp->namPtr);
@@ -228,7 +251,7 @@ void wifiParseParam(comp_t* comp) {
   } else
   if (fmt = strstr(comp->paramPtr, "%C")) {
     comp->type = 'C';   comp->fixed = false;
-    fmt[1] = 'd';
+    fmt[1] = comp->boolFmt ? 's' : 'd';  // boolFmt can only assigned to text-components
   } else
   if (fmt = strstr(comp->paramPtr, "%R")) {
     comp->type = 'R';   comp->fixed = false;
@@ -263,11 +286,11 @@ void wifiParseParam(comp_t* comp) {
 
 /*
   The function separates the tokens and splits the tokens into objname and its parameter.
-  Parameters can be nullptr!
   Note:
-   The token split chars will be changed to '\0' char, so that the pointer to the strings pointing to separated strings.
-   At the end the hole string is fragmented into separated strings and it is not any more possible to search for a
-   objname by using  strstr(compStr, "_compName")!=nullptr`.
+   - Parameters can be nullptr!
+   - The token split chars will be changed to '\0' char, so that the pointer to the strings pointing to separated strings.
+     At the end the hole string is fragmented into separated strings and it is not any more possible to search for a
+     objname by using  strstr(compStr, "_compName")!=nullptr`.
 */
 int splitCompStr() {
   #define TOK_SPLIT   ";"   // char to split components
@@ -313,10 +336,10 @@ int splitCompStr() {
 }   // splitCompStr()
 
 
-// Searches the list for a componetname that starts with the specified string, starting with the specified startIdx
+// Searches the list for a componentname that starts with the specified string, beginning at startIdx
 int hasCompname(const char* compName, int startIdx=0) {
   for (int i=startIdx; i<PG_upd.compCount; i++) {
-    if (strHas(PG_upd.compList[i].namPtr, compName)) {
+    if (strStart(PG_upd.compList[i].namPtr, compName)) {
       return i;
     }
   }
@@ -372,9 +395,11 @@ bool Page_updateTime() {
       if ( !PG_upd.time.newMin() && !PG_upd.compList[idx].hasSec )
         continue;   // only second has changed, but the component has no second format secified
 
+      comp_t* comp = &PG_upd.compList[idx];
+
       // set default formats for the standard time components if none is defined in the parameter
-      if (nullptr == PG_upd.compList[idx].paramPtr) {  // no param defined
-        if (strcmp("_time.txt", PG_upd.compList[idx].namPtr) == 0) {
+      if (nullptr == comp->paramPtr) {  // no param defined
+        if (strcmp("_time.txt", comp->namPtr) == 0) {
           strncpy(fmt, NEX_cfg.fmtTime[0], MAX_FMTPARAM_LEN);   // use the first default format
         }
         else
@@ -383,26 +408,26 @@ bool Page_updateTime() {
           strncpy(fmt, "99", MAX_FMTPARAM_LEN);  // only use numbers as it could also be a non-text component
       }
       else {  // component param is defined
-        if (PG_upd.compList[idx].paramPtr[0] == '#') {  // first char is '#', use the format-macro of the specified number (#0-#3)
-          int nr = atoi(PG_upd.compList[idx].paramPtr+1);
+        if (comp->paramPtr[0] == '#') {  // first char is '#', use the format-macro of the specified number (#0-#3)
+          int nr = atoi(comp->paramPtr+1);
           if (nr >= 0 && nr <=3 && NEX_cfg.fmtTime[nr])
             strncpy(fmt, NEX_cfg.fmtTime[nr], MAX_FMTPARAM_LEN);  // copy from the format-macro
         }
         else
-          strncpy(fmt, PG_upd.compList[idx].paramPtr, MAX_FMTPARAM_LEN);  // use param as format specifier for _time
+          strncpy(fmt, comp->paramPtr, MAX_FMTPARAM_LEN);  // use param as format specifier for _time
       }
 
       // now it is sure that a format is defined
 
       // Is it the first update? Then check the format for existing second specifier.
       // This may be necessary if the format comes from a format macro, which is not checked for seconds in assignConfig()
-      if (PG_upd.time.fresh() && !PG_upd.compList[idx].hasSec) {
-        PG_upd.compList[idx].hasSec = timeHasSeconds(fmt);
+      if (PG_upd.time.fresh() && !comp->hasSec) {
+        comp->hasSec = timeHasSeconds(fmt);
       }
 
-      bool isTxt = strHas(PG_upd.compList[idx].namPtr, ".txt");   // is it of type text?
+      bool isTxt = strHas(comp->namPtr, ".txt");   // is it of type text?
 
-      sprintf(buff, "%s=", PG_upd.compList[idx].namPtr);
+      sprintf(buff, "%s=", comp->namPtr);
       if (isTxt) strcat(buff, "\"");    // if component is text type, sourond the vale by '"'
       NTP_asString(fmt, (buff+strlen(buff)), NEX_MAX_TEXTLEN);
       if (isTxt) strcat(buff, "\"");
@@ -416,6 +441,7 @@ bool Page_updateTime() {
 bool Page_updateWifi() {
   char buff[NEX_MAX_NAMELEN+1 + NEX_MAX_TEXTLEN+1] = {0};   // buffer for the command to set the value of the component
   char fmt[MAX_FMTPARAM_LEN+1] = {0};                       // buffer for formats for the value
+//### replace PG_upd.compList[idx] by comp with comp_t* comp = &PG_upd.compList[idx];
 
   int idx = -1;
   do {
@@ -428,18 +454,19 @@ bool Page_updateWifi() {
         continue;
       }
 
-      bool isTxt  = strHas(PG_upd.compList[idx].namPtr, ".txt");   // is component of type text?
+      comp_t* comp = &PG_upd.compList[idx];
+      bool isTxt  = strHas(comp->namPtr, ".txt");   // is component of type text?
 
 // log_d("### SET: comp='%s' isTxt=%d fmt='%s' type=%c fix=%d, s=%d e=%d",
-    // PG_upd.compList[idx].namPtr, (int)isTxt, PG_upd.compList[idx].paramPtr,
-    // PG_upd.compList[idx].type, PG_upd.compList[idx].fixed, PG_upd.compList[idx].s, PG_upd.compList[idx].e);
+    // comp->namPtr, (int)isTxt, comp->paramPtr,
+    // comp->type, comp->fixed, comp->s, comp->e);
 
 
-      sprintf(buff, "%s=", PG_upd.compList[idx].namPtr);
+      sprintf(buff, "%s=", comp->namPtr);
       if (isTxt) strcat(buff, "\"");
 
       // Handel the type of data the component wants to show
-      switch (PG_upd.compList[idx].type) {
+      switch (comp->type) {
 
         // the component has a parameter with an unknown data specifier
         case '?': {     // detected in wifiParseParam()
@@ -462,31 +489,31 @@ bool Page_updateWifi() {
         /**** Following values do not change while connected to wifi ***/
 
         case 'N': {
-          sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.ssid);
+          sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.ssid);
           break;
         }
         case 'I': {
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) )
+          if ( (comp->s >= 0) && (comp->s <=3) )
             // Only one Part of the ip should be used.
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.ipv4[PG_upd.compList[idx].s]);
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.ipv4[comp->s]);
           else
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.ipv4.toString().c_str());
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.ipv4.toString().c_str());
           break;
         }
         case 'G': {
           // Only one Part of the gateway ip should be used.
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) )
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.gatewy[PG_upd.compList[idx].s]);
+          if ( (comp->s >= 0) && (comp->s <=3) )
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.gatewy[comp->s]);
           else
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.gatewy.toString().c_str());
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.gatewy.toString().c_str());
           break;
         }
         case 'S': {
           // Only one Part of the subnet mask should be used.
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].s <=3) )
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.snmask[PG_upd.compList[idx].s]);
+          if ( (comp->s >= 0) && (comp->s <=3) )
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.snmask[comp->s]);
           else
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.fixed.snmask.toString().c_str());
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.snmask.toString().c_str());
           break;
         }
 /*### M = MAC
@@ -497,20 +524,46 @@ bool Page_updateWifi() {
   %M[0..5] Teilwert als Zahl
 */
 
+/*### P = config Portal
+  WiFiMgr.get???
+  ### Format Möglichkeit für bool: _wifiBool.txt&%P[isTrue:isFalse];
+*/
+
         /**** Following values changing while connected to wifi ***/
 
         case 'C': {
-          // log_d("  type C: new=%d", PG_upd.wifi.newRSSI());//###
-
           if (!PG_upd.wifi.newConn() )  continue;
 
-          // log_d("    fmt=%s val=%d", PG_upd.compList[idx].paramPtr, PG_upd.wifi.curr.conn);//###
-          sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.curr.conn);
+          if (comp->boolFmt and isTxt) { // has a boolean format specifier and only allowed for text components
+            /* Example:
+                .param = 'wifi is %C[:dis]connected!'
+                wifiHandleRange() changes the .paramPtr to this: 'wifi is %C\0\0dis\0connected!'
+            */
+
+            // log_d("### BOOLFMT param=%s, s=%d, e=%d",
+            //     comp->paramPtr,
+            //     comp->s,
+            //     comp->e);
+
+            char* p = comp->paramPtr;  // Pointer to format beginning
+            char* t = p + comp->s;     // Pointer to truetext
+            char* f = p + comp->e;     // Pointer to falsetext
+            char* x = p + comp->e + strlen(f) + 1;     // Pointer to the rest of the format
+
+            char fmt[strlen(p)+strlen(x)+1];
+            strcpy(fmt, p);
+            strcat(fmt, x);   // concat the begin and the rest of the format
+
+            // log_d("### BOOLFMT p='%s', t='%s', f='%s', x='%s' fmt='%s'", p, t, f, x, fmt);
+
+            sprintf(buff+strlen(buff), fmt, PG_upd.wifi.curr.conn ? t : f);
+          } else
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.curr.conn);
           break;
         }
         case 'R': {
           if (!PG_upd.wifi.newRSSI() )  continue;
-          sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, PG_upd.wifi.curr.rssi);
+          sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.curr.rssi);
           break;
         }
         case 'Q': {
@@ -528,14 +581,14 @@ bool Page_updateWifi() {
               RSSI ≤ -100 dBm => quality = 0%
               -100 dBm ≤ RSSI ≤ -50 dBm => quality ~= 2 x (RSSI + 100)
           */
-          if ( (PG_upd.compList[idx].s >= 0) && (PG_upd.compList[idx].e >= 0)) {    // use a range instaed of %
-            // log_d("   Q rng  fmt=%s", PG_upd.compList[idx].paramPtr);//###
-            int   r = PG_upd.compList[idx].e - PG_upd.compList[idx].s + 1;
-            float v = constrain(Q * r / 100, PG_upd.compList[idx].s, PG_upd.compList[idx].e);
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, (int)v + PG_upd.compList[idx].s);
+          if ( (comp->s >= 0) && (comp->e >= 0)) {    // use a range instaed of %
+            // log_d("   Q rng  fmt=%s", comp->paramPtr);//###
+            int   r = comp->e - comp->s + 1;
+            float v = constrain(Q * r / 100, comp->s, comp->e);
+            sprintf(buff+strlen(buff), comp->paramPtr, (int)v + comp->s);
           } else {
-            // log_d("   Q prz  fmt=%s", PG_upd.compList[idx].paramPtr);//###
-            sprintf(buff+strlen(buff), PG_upd.compList[idx].paramPtr, (int)Q);
+            // log_d("   Q prz  fmt=%s", comp->paramPtr);//###
+            sprintf(buff+strlen(buff), comp->paramPtr, (int)Q);
           }
           break;
         }
