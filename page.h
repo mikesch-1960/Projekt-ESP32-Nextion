@@ -47,7 +47,7 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
   struct {    // time struct - for components starting with _time
     const unsigned long INTERVAL = 1000;    // DO NOT CHANGE!
     bool used     = false;
-    tm* timeinfo  = &NTP_store.timeinfo;
+    tm* timeinfo  = &NTP.timeinfo;
 
     struct {
       unsigned long loopMs = 0;
@@ -86,14 +86,17 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
       IPAddress ipv4  ;         // (%I)
       IPAddress gatewy;         // (%G)
       IPAddress snmask;         // (%S)
+      uint8_t   mac[6];         // (%M)
     }
     fixed;
+
     struct {    // the last values updated to the components
       unsigned long loopMs = 0;
       int rssi = 999;   // in dBa;  (%R)
       int conn = 9;     // WiFI 1=connected   (%C)
     }
     last;
+
     struct {    // current value; is loaded before updating the components
       int rssi;
       int conn;
@@ -112,7 +115,9 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
       fixed.ipv4   = {0, 0, 0, 0};
       fixed.gatewy = {0, 0, 0, 0};
       fixed.snmask = {0, 0, 0, 0};
+      memset(fixed.mac, 0, 6);
     }
+
     bool fresh() {
       return (last.rssi == 999) || ((int)(WiFi.status() == WL_CONNECTED) != last.conn);
     }
@@ -128,15 +133,19 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
       // Update the fixed values if page is new or wifi connection changed
       if (fresh()) {
         if (WiFi.isConnected()) {
-          strncpy(fixed.ssid, wifiMgr.getWiFiSSID().c_str(), 32);
+          strncpy(fixed.ssid, WiFi.SSID().c_str(), 32);
           fixed.ipv4   = WiFi.localIP();
           fixed.gatewy = WiFi.gatewayIP();
           fixed.snmask = WiFi.subnetMask();
+          // Get MAC address for WiFi station
+          esp_read_mac(fixed.mac, ESP_MAC_WIFI_STA);
+
         } else {
           strncpy(fixed.ssid, "not connected", 32);
           fixed.ipv4   = {0, 0, 0, 0};
           fixed.gatewy = {0, 0, 0, 0};
           fixed.snmask = {0, 0, 0, 0};
+          memset(fixed.mac, 0, 6);
         }
       }
       bool ret = (millis() > last.loopMs || fresh());
@@ -272,6 +281,10 @@ void wifiParseParam(comp_t* comp) {
   if (fmt = strstr(comp->paramPtr, "%S")) {
     comp->type = 'S';
     fmt[1] = comp->s == -1 ? 's' : 'd';
+  } else
+  if (fmt = strstr(comp->paramPtr, "%M")) {
+    comp->type = 'M';
+    fmt[1] = comp->s == -1 ? 's' : 'd';
   } else {
     comp->type = '?';
     log_e("[PG:ERROR] wifi component '%s' with param '%s' has an unknown data specifier!", comp->namPtr, comp->paramPtr);
@@ -280,7 +293,6 @@ void wifiParseParam(comp_t* comp) {
   // Number components can only have a %d format to store the value
   if (!strHas(comp->namPtr, ".txt") && strlen(comp->paramPtr) >= 2)
     strcpy(comp->paramPtr, "%d");
-// log_d("### PREPARE: done -  fmt=%c type=%c param='%s'", fmt[1], comp->type, comp->paramPtr);
 }   // wifiParseParam()
 
 
@@ -516,18 +528,22 @@ bool Page_updateWifi() {
             sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.snmask.toString().c_str());
           break;
         }
-/*### M = MAC
-  WiFi.BSSID(*bssid);
-  log_d("%s", WiFi.macAddress());
-  const uint8_t bssid[6] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-  30:AE:A4:07:0D:64 als Text
-  %M[0..5] Teilwert als Zahl
-*/
 
-/*### P = config Portal
-  WiFiMgr.get???
-  ### Format Möglichkeit für bool: _wifiBool.txt&%P[isTrue:isFalse];
-*/
+        case 'M': {
+          // Only one Part of the mac address should be used.
+          if ( (comp->s >= 0) && (comp->s <=5) )
+            sprintf(buff+strlen(buff), comp->paramPtr, PG_upd.wifi.fixed.mac[comp->s]);
+          else
+            sprintf(buff+strlen(buff), "%02X:%02X:%02X:%02X:%02X:%02X",
+                PG_upd.wifi.fixed.mac[0],
+                PG_upd.wifi.fixed.mac[1],
+                PG_upd.wifi.fixed.mac[2],
+                PG_upd.wifi.fixed.mac[3],
+                PG_upd.wifi.fixed.mac[4],
+                PG_upd.wifi.fixed.mac[5]
+            );
+          break;
+        }
 
         /**** Following values changing while connected to wifi ***/
 

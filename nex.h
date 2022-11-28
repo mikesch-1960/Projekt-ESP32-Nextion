@@ -173,7 +173,7 @@ void NEX_handleMsg(uint8_t payload[]) {
     case 0x67:  // Returned when 'sendxy' (touchevents) is set to 1 (activated)
       break; // ignore these responses
 
-/*  the follawing messages are not required at the moment
+/*  the following messages are not required at the moment
     case 0x00: { // 00 00 00 FF FF FF - Returned when Nextion has started or reset
       log_i("[Nex] Screen started or reseted!");
       break;
@@ -229,6 +229,11 @@ void NEX_handleMsg(uint8_t payload[]) {
         assignConfig(dta);
       } else
 
+      if (strcmp("MQ", msgId) == 0) {   // #### MQTT testpage - send from HMI-file
+        payload[cntBytes-3] = '\0';     // remove message tail
+        dta = (char*)payload + 3;       // skip header
+        mqttClient.subscribe(dta, 0);
+      } else
 
       if (strcmp("PI", msgId) == 0) {   // page init - send in HMI-file on page preinitialize
         payload[cntBytes-3] = '\0';     // remove message tail
@@ -241,11 +246,10 @@ void NEX_handleMsg(uint8_t payload[]) {
         Page_exit();
       } else
 
-
       if (strcmp("CM", msgId) == 0) {   // custom message - send in HMI-file by buttons of a page
         switch ((char)payload[3]) {     // id of that message
           case 'B': {
-            wifiMgr.reboot();   // reboot ESP
+            ESP.restart();   // restart ESP
             delay(1000);
             break;
           }
@@ -255,46 +259,21 @@ void NEX_handleMsg(uint8_t payload[]) {
         }
       } else
 
-
       if (strcmp("TT", msgId) == 0) {   //### Temporary tests - used on page 'pgTest1'
         switch ((char)payload[3]) {     // id of that message
           case '1':   { NEX_sendCommand("t0.txt=\"I'am ESP\"", true);  break; }
           case '2':   { NEX_sendCommand("t0.txt=\"Ich bin's\"", true);  break; }
-          case '3':   {   // toggle wifi connection
-            PG_upd.reset();
-            if (WiFi.status() == WL_CONNECTED) {
-              NEX_sendCommand("t0.txt=\"Disconnect Wifi...\"", true);
-              wifiMgr.disconnect();
-              log_d("Disconnecting WiFi...");
+          case '3':   {   // disconnect wifi
+              if (WiFi.status() == WL_CONNECTED) {
+                WiFi.disconnect();
+                // log_d("Disconnecting WiFi...");
+              }
+              break;
             }
-            else {
-              NEX_sendCommand("t0.txt=\"Connect Wifi...\"", true);
-              log_d("Reconnecting WiFi...");
-              WiFi.reconnect();
-            }
-            break; }
-          case 'C':   {   // prepare ESP to present the configuration portal
-            if (WiFi.status() != WL_CONNECTED) {  // WifFi not connected
-              NEX_sendCommand("t0.txt=\"Config Portal started...\"", true);
-              // starting an AP to reconfigur the connection settings
-              wifiMgr.setConfigPortalBlocking(false);
-              wifiMgr.startConfigPortal();
-              log_d("Config Portal started...");
-            }
-            else {
-              // starting an webserver on an existing WiFi connection to reconfigur the connection settings
-              NEX_sendCommand("t0.txt=\"Started webserver...\"", true);
-              wifiMgr.startWebPortal();
-              log_d("Started webserver on %s...", PG_upd.wifi.fixed.ipv4);
-            }
-
-            break;
-          }
           default:
             log_d("[NEX]### Unhandled temporary test id '%s'", payload);
         }
-      } else
-      {}
+      }
 
       break;
     }   // case NEX_MSG_HEAD

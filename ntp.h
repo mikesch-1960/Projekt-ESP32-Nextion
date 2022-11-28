@@ -11,13 +11,13 @@ void NTP_begin(char* server, char* tzCfg) {
   configTime(0, 0, server); // 0, 0 because we will use TZ in the next line
   setenv("TZ", tzCfg, 1); // Set environment variable with your time zone
   tzset();
-  log_i("NTP initialized!\n");
+  log_i("NTP initialized!");
 }
 
 
 void NTP_updTimeinfo() {
-  time(&NTP_store.now); // read the current time
-  localtime_r(&NTP_store.now, &NTP_store.timeinfo); // update the structure tm with the current time
+  time(&NTP.now); // read the current time
+  localtime_r(&NTP.now, &NTP.timeinfo); // update the structure tm with the current time
 }
 
 
@@ -26,7 +26,7 @@ void NTP_updTimeinfo() {
 // NOTE: NTP_updTimeinfo();  must be called before, to get the actual time!
 size_t NTP_asString(char fmt[], char res[], size_t resLen) {
   strncpy(res, "?\0\0\0", resLen-1);
-  size_t r = strftime(res, resLen-1, fmt, &NTP_store.timeinfo);
+  size_t r = strftime(res, resLen-1, fmt, &NTP.timeinfo);
 
   return strlen(res);
 }

@@ -1,24 +1,24 @@
-/*
+/* x=nicht mehr verfolgt; v=implementiert und verifiziert; ?=implementiert aber nicht genug getestet; !=wichtige oder umfassende Änderung
+
   In dieser Version: -----
-  - Kommunikation zwischen ESP und Display
-  - Mit WifiManager
-  - NTP server
-  - Die im 'page init event' gemeldeten _timeXYZ Komponenten werden automatisch beim Minuten-/oder Sekundenwechsel aktualisiert, abhängig davon ob im Format ein Sekunden Bezeichner enthalten ist.
-  - Die im 'page init event' gemeldeten _wifiXYZ Komponenten werden automatisch aktualisiert
-  - Format Makros: 'Program.s' kann im 'config event' bis zu 4 Formate (fmtTime0-3) für _time Komponenten definieren. Diese werden in der 'page init' Meldung mit #0-#3 addressiert. Die Angabe muss die einzige im param sein. Z.B. `_timeM1&#1;` // use second timeformat macro
-  - Baudrate zum Nextion Display wurde auf die höchst mögliche gesetzt (921600), dass muss in der HMI Datei im 'Program.s' Skript auch so eingestellt sein!
-  - Serial.printf ersetzt durch log_e/w/i/d/v. https://thingpulse.com/esp32-logging/
-  - WifiManger um Eingabefelder für MQTT Verbindung erweitert
-  - Reconnect to wifi after disconnect, if connection via wifi manager was successfull before.
+  v Kommunikation zwischen ESP und Display
+  X Mit WifiManager
+  v AsyncMQTT_Generic Bibliothek verwendet statt WifiManager
+  v NTP server
+  v Die im 'page init event' gemeldeten _timeXYZ Komponenten werden automatisch beim Minuten-/oder Sekundenwechsel aktualisiert, abhängig davon ob im Format in Sekunden Bezeichner enthalten ist.
+  v Die im 'page init event' gemeldeten _wifiXYZ Komponenten werden automatisch aktualisiert
+  v Format Makros: 'Program.s' kann im 'config event' bis zu 4 Formate (fmtTime0-3) für _time Komponenten definieren. Diese werden in der 'page init' Meldung mit #0-#3 addressiert. Die Angabe muss die einzige im param sein. Z.B. `_timeM1&#1;` // use second timeformat macro
+  v Baudrate zum Nextion Display wurde auf die höchst mögliche gesetzt (921600), dass muss in der HMI Datei im 'Program.s' Skript auch so eingestellt sein!
+  v Serial.printf ersetzt durch log_e/w/i/d/v. https://thingpulse.com/esp32-logging/
+  v Bei den Parametern zu den _wifi Komponenten eine 'echte' Formatangabe wie '%R dBa' machen können.
+  v Bei den Parametern zu den _wifi Komponenten kann ein boolean format '_wifiBool.txt&%P[isTrue:isFalse]' for %C,%P verwendet werden.
 
   Todos: -----
   x LongTouch und swipe im ESP steuern
-  ? Wenn Wifi ausfällt: Reconnect ohne Config Portal wenn schon mal ok war. Wann Config Portal?
-  - Die zusätzlichen Parameter des WiFiMgr im LittleFS speichern.
-  - Das dimmen in der Startseite des Nextion funktioniert nicht
+  v WifiManager entfernen und https://github.com/marvinroger/async-mqtt-client verwenden. Keine blockierender code, saubere Ereignisse, ...!
+  v Das dimmen in der Startseite des Nextion funktioniert nicht
   - implement %M mac address to _wifi format
-  - implement %P captive portal active?  to _wifi format
-  - Häftiges testen der Konventionen zu den vom Nextion gesendeten componenten, das durch ein #define ein und aus geschaltet werden kann.
+  - Häftiges testen der Konventionen zu den vom Nextion gesendeten Komponenten, das durch ein #define ein und aus geschaltet werden kann.
   - Aus 'program.s' heraus eine Liste mit aktualisierbaren globalen Variablen(int) und/oder globalen Komponenten in Formularen senden, wie beim 'page init' Ereignis.
     Ideen dazu: comp_t hat zwei Zähler. Einen für die globalen, immer zu aktualisierenden Elemente und einen zweiten für die in der Seite zu aktualisierenden Komponenten. Dabei muss auf doppelte geachtet werden!
 
@@ -27,16 +27,26 @@
     Hier wird dann ein Kommando abgesetzt, das entsprechende globale Variablen im Screen setzt, die dort dann beim release ausgewertet werden können.
     Problem: sendxy sendet immer nur die 'pressed' Koordinate!
     !Ich gebe auf und bleibe dabei das Wischen in den einzelnen Seiten zu machen, da (zumindest bei meinem Nextion) kein Ereignis die Koordinaten beim loslassen sendet.
-  v Bei den Parametern zu den _wifi Komponenten eine 'echte' Formatangabe wie '%R dBa' machen können.
-  - Bei den Parametern zu den _wifi Komponenten Möglichkeit für bool: _wifiBool.txt&%P[isTrue:isFalse];
+  v Im Display eine Fehlerseite einbauen, die der ESP verwenden kann um Fehler (z.B. beim 'page int' Ereignis) zu melden.
   - En-/Disable Buttons by setting Textcolor and checking that color on press/release event
+  - Das ganze System umstellen: Die Komponentennamen sind egal. Beim 'page init' muss der Komponentenname oder die Komponentenid(#23) angegeben werden. Danach der data-specifier (zusätzlich zu denen vom jetzigen wifi %d=Datum %t=Zeit %m=mqtt), dann der jetzige param.
+      Vorteile: kürzere Komponentennamen möglich, standard Komponentennamen möglich, Unterscheidung von Zeit und Datum.
+      t0.txt=d/%A %d.%m.%Y^p0.pic=Q[2,5]^n0.val=R/%d dBa^#12=t/%H:%M^ODTmp.txt=m.topicid/%1.1f °C^
 
   Interessante Infos
   . zu WiFI:
       connect to wifi (absolutly nonblocking) via FreeRTOS
       https://www.youtube.com/watch?v=YSGPcm-qxDA
 
+  . zu wifimanager:
+      mit zusätzlichem html https://github.com/tzapu/WiFiManager/blob/master/examples/Super/OnDemandConfigPortal/OnDemandConfigPortal.ino
+        const char* z = "<H1>TEST</H1>";
+        WiFiManagerParameter custom_text(z);
+        wifiManager.addParameter(&custom_text);
+      wifiManager.setCustomHeadElement("<style>body {background-color: powderblue;}</style>");
+
   . zu MQTT:
+      https://stackoverflow.com/questions/35049248/esp8266-wifimanager-pubsubclient
       https://pubsubclient.knolleary.net/api
       https://github.com/knolleary/pubsubclient
       https://arduinojson.org/v6/how-to/use-arduinojson-with-pubsubclient/
@@ -46,172 +56,174 @@
       Unofficial Nextion/TJC User Forum:  https://unofficialnextion.com/
       Tips, Tricks, and Traps for Nextion Devices:    https://github.com/krizkontrolz/Home-Assistant-nextion_handler/tree/main/Tips_and_Tricks
       A Full Instruction Set (with hidden ones):    https://github.com/UNUF/nxt-doc/blob/main/Protocols/Full%20Instruction%20Set.md#readme
+
+  . zum NSPanel von Sonoff
+      NSPanel specific IO-Pins: https://www.kickstarter.com/projects/sonoffnspanel/sonoff-nspanel-smart-scene-wall-switch/posts/3328417
+        Pin   IO              Corresponding function
+         7    SENSOR_CAPN     NTC, temperature sensing
+        16    GPIO27          KEY2
+        17    MTMS            KEY1
+        23    GPIO0           for flashing firmware
+        41    U0TXD           ESP_TX, connect to ESP
+        40    U0RXD           ESP_RX
+        24    GPIO4           T_RST, screen reset, high valid
+        25    GPIO16          NEX_TX, connect to screen
+        27    GPIO17          NEX_RX, connect to screen
+        38    GPIO19          RELAY2, secound relay of the NSPanel
+        39    GPIO22          RELAY1, first relay of the NSPanel
+        42    GPIO24          BUZZER, control passive buzzer
 */
 
-// forward functions ###
-// bool wifiConnect();
-// bool wifiDisconnect();
 
-
-#define CORE_DEBUG_LEVEL      ARDUHAL_LOG_LEVEL_VERBOSE      // doesn't seem to work!
-// in vscode press F1: 'Arduino: Board Config' to change core debig level
+// #define CORE_DEBUG_LEVEL      ARDUHAL_LOG_LEVEL_VERBOSE      // doesn't seem to work!
+// in vscode press F1: 'Arduino: Board Config' to change core debug level
 
 #define strHas(str, what)     (strstr(str, what)!=nullptr)
-#define strStart(str, with)     (strstr(str, with)==str)
+#define strStart(str, with)   (strstr(str, with)==str)
 
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
-WiFiManager wifiMgr;
+// ------------------------------------------------------------------------------------------------
+#pragma region  USER_SETTINGS
 
-//### LittleFS U:\Quelltexte\Arduino\libraries\LittleFS_esp32\examples\LITTLEFS_test\LittleFS_test.ino
-#include "mqttGlobals.h"
+// uncomment this to define the credentials in this file
+#define USE_CREDENTIALS_FILE
 
-bool shouldSaveConfig = false;
-bool ConnectionDataOk = false;    // was successfully connected via wifiManager before
+#ifdef USE_CREDENTIALS_FILE
+  #include "credentials.h"  // is not included in my github repository!
+#else
+  #define WIFI_SSID         "YourSSID"
+  #define WIFI_PWD          "YourPassword"
 
-// NTP settings
-WiFiManagerParameter wmcp_ntp_server("ntpserver", "NTP server:", "0.europe.pool.ntp.org", 51);
-WiFiManagerParameter wmcp_ntp_tz("ntptimezone", "NTP timezone config:", "CET-1CEST,M3.5.0/02,M10.5.0/03", 61);
-// MQTT settings
-WiFiManagerParameter custom_mqtt_server("server", "MQTT Server",  "rpiiobroker", 40);    // 192, 168, 2, 136
-WiFiManagerParameter custom_mqtt_port("port", "MQTT Port",  "1883", 6);
-WiFiManagerParameter custom_mqtt_username("username", "mqtt username",  "", 40);
-WiFiManagerParameter custom_mqtt_password("password", "mqtt password",  "", 40);
-// WiFiManagerParameter wmcp_nex_dimHi("nexDimHigh:", "Nextion:\nDim norm.:", "60", 4);//###
-// wmcp_nex_dimHi.setValue("80", 4);//### how to change the value in case config from Nextion
+  #define MQTT_HOST         IPAddress(192, 168, 79, 0)   // or hostname like "your.mqtt.hostname"
+  #define MQTT_PORT         1883
+  // If your broker requires authentication, uncomment the two lines below
+  // #define MQTT_USER       ""
+  // #define MQTT_PWD        ""
+  #define MQTT_CLIENTID     "MyNextion"
+#endif
 
+// https://github.com/SensorsIot/NTP-time-for-ESP8266-and-ESP32
+// https://remotemonitoringsystems.ca/time-zone-abbreviations.php
+#define NTP_SERVER          "europe.pool.ntp.org"
+#define NTP_TIMEZONE        "CET-1CEST,M3.5.0/02,M10.5.0/03"
 
-/*
-  NSPanel specific IO-Pins: https://www.kickstarter.com/projects/sonoffnspanel/sonoff-nspanel-smart-scene-wall-switch/posts/3328417
-    Pin   IO              Corresponding function
-     7    SENSOR_CAPN     NTC, temperature sensing
-    16    GPIO27          KEY2
-    17    MTMS            KEY1
-    23    GPIO0           for flashing firmware
-    41    U0TXD           ESP_TX, connect to ESP
-    40    U0RXD           ESP_RX
-    24    GPIO4           T_RST, screen reset, high valid
-    25    GPIO16          NEX_TX, connect to screen
-    27    GPIO17          NEX_RX, connect to screen
-    38    GPIO19          RELAY2, secound relay of the NSPanel
-    39    GPIO22          RELAY1, first relay of the NSPanel
-    42    GPIO24          BUZZER, control passive buzzer
-*/
+#define MQTT_RECONNECT_TIME 5000
+#define WIFI_RECONNECT_TIME 5000
+
+#pragma endregion USER_SETTINGS
+// ------------------------------------------------------------------------------------------------
+
+#include <WiFi.h>
+
+extern "C"
+{
+  #include "freertos/FreeRTOS.h"
+  #include "freertos/timers.h"
+}
+
+TimerHandle_t mqttReconnectTimer;
+TimerHandle_t wifiReconnectTimer;
+
+// https://github.com/khoih-prog/AsyncMQTT_Generic
+// API reference: https://github.com/khoih-prog/AsyncMQTT_Generic/blob/main/docs/2.-API-reference.md
+#include <AsyncMqtt_Generic.h>
+
+AsyncMqttClient mqttClient;
 
 #include "ntpGlobals.h"
 #include "ntp.h"
-
 #include "nexGlobals.h"
 #include "nex.h"
+#include "mqtt.h"
 
 
-void saveParamsCallback () { //###
-  log_d("Get Params: %s : %s", wmcp_ntp_server.getID(), wmcp_ntp_server.getValue());
+void WiFiEvent(WiFiEvent_t event)
+{
+  switch (event)
+  {
+#if USING_CORE_ESP32_CORE_V200_PLUS
+    case ARDUINO_EVENT_WIFI_READY:
+      Serial.println("WiFi ready");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_START:
+      Serial.println("WiFi STA starting");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      Serial.println("WiFi STA connected");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      Serial.println("WiFi connected");
+      Serial.print("IP address: "); Serial.println(WiFi.localIP());
+      connectToMqtt();
+      break;
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      Serial.println("WiFi lost IP");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      Serial.println("WiFi lost connection");
+      xTimerStop(mqttReconnectTimer, 0); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
+      xTimerStart(wifiReconnectTimer, 0);
+      break;
+#else
+    case SYSTEM_EVENT_STA_GOT_IP:
+      log_i("  WiFi connected! IP address: %s", WiFi.localIP().toString().c_str());
+      NTP_begin(NTP_SERVER, NTP_TIMEZONE);  // Connecting to NTP server
+      connectToMqtt();
+      break;
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+      Serial.println("WiFi lost connection");
+      xTimerStop(mqttReconnectTimer, 0); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
+      xTimerStart(wifiReconnectTimer, 0);
+      break;
+#endif
+    default:
+      break;
+  }
 }
 
-bool wifiConnect() {
-  log_i("connected to WiFi %s (%s) %ddBa (%d%%)...",
-      wifiMgr.getWiFiSSID().c_str(), WiFi.localIP().toString().c_str(),
-      WiFi.RSSI(), wifiMgr.getRSSIasQuality(WiFi.RSSI())
-  );
+void connectToWifi()
+{
+  Serial.println("Connecting to Wi-Fi...");
+  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+  WiFi.setSleep(false);
+  WiFi.begin(WIFI_SSID, WIFI_PWD);
+}
 
-  //read updated parameters
-  strncpy(NTP_store.ntpServername, wmcp_ntp_server.getValue(), 50);
-  strncpy(NTP_store.ntpTimezone, wmcp_ntp_tz.getValue(), 50);
-
-  strncpy(mqtt.server, custom_mqtt_server.getValue(), 40);
-  strncpy(mqtt.port, custom_mqtt_port.getValue(), 6);
-  strncpy(mqtt.username, custom_mqtt_username.getValue(), 40);
-  strncpy(mqtt.password, custom_mqtt_password.getValue(), 40);
-
-  //save the custom parameters to LittleFS
-  if (shouldSaveConfig) {
-    //### LittleFS to save these settings
-    log_i("Saving config...");
-  }
-
-  NTP_begin((char*)wmcp_ntp_server.getValue(), (char*)wmcp_ntp_tz.getValue());
-
-  //### set up mqtt like in WiFiMQTTManager.cpp at line 150
-
-  log_i("Wifi connected!");
-  return true;
-}   // wifiConnect()
-
-bool wifiDisconnect(int test) {
-  log_i("Wifi disconnected! ### %d", test);
-  return true;
-}   // wifiDisconnect()
 
 void setup() {
-  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
-
   Serial.begin(115200);
-  Serial.println();  Serial.println();
+  while (!Serial && millis() < 5000);
 
-  NEX_begin(921600 /*### 0=detect */);    // use the fastest possible value! Must be set in Program.s with baud=92160
+  log_i("\nStarting Nextion driver on '%s'", ARDUINO_BOARD);
 
-  /* https://github.com/tzapu/WiFiManager/blob/master/examples/Super/OnDemandConfigPortal/OnDemandConfigPortal.ino */
+  NEX_begin(921600);    // use the fastest possible value! Must be set in the Nextion Editor in Program.s with same baudrate
 
-  // wifiMgr.resetSettings();     //#### reset settings - wipe credentials for testing
+  mqttReconnectTimer =
+    xTimerCreate("mqttTimer", pdMS_TO_TICKS(5000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
+  wifiReconnectTimer =
+    xTimerCreate("wifiTimer", pdMS_TO_TICKS(5000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToWifi));
 
-  wifiMgr.setDebugOutput(false);
-  wifiMgr.setConfigPortalBlocking(false);
+  WiFi.onEvent(WiFiEvent);
+  connectToWifi();
 
-  wifiMgr.addParameter(&wmcp_ntp_server);
-  wifiMgr.addParameter(&wmcp_ntp_tz);
+  mqttClient.onConnect(onMqttConnect);
+  mqttClient.onDisconnect(onMqttDisconnect);
+  mqttClient.onSubscribe(onMqttSubscribe);
+  mqttClient.onUnsubscribe(onMqttUnsubscribe);
+  mqttClient.onMessage(onMqttMessage);
+  mqttClient.onPublish(onMqttPublish);
 
-  wifiMgr.addParameter(&custom_mqtt_server);
-  wifiMgr.addParameter(&custom_mqtt_port);
-  wifiMgr.addParameter(&custom_mqtt_username);
-  wifiMgr.addParameter(&custom_mqtt_password);
+  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
 
-  wifiMgr.setSaveParamsCallback(saveParamsCallback);///###
-
-  wifiMgr.setSaveConfigCallback([&]() {
-    log_i("### Should save config...");
-    shouldSaveConfig = true;
-  });
-
-  wifiMgr.setAPCallback([&](WiFiManager *myWiFiManager) {
-    log_i("Entering config mode...");
-    log_i("  %s", WiFi.softAPIP().toString().c_str());
-    log_i("  Connect your device to WiFi SSID %s to configure WiFi and MQTT...", myWiFiManager->getConfigPortalSSID().c_str());
-    ConnectionDataOk = false;
-    //### Inform Nextion
-  });
-
-  // set dark mode via invert class
-  wifiMgr.setDarkMode(true);
-  wifiMgr.setWiFiAutoReconnect(true);
-  wifiMgr.setConnectTimeout(10); // seconds
-  wifiMgr.setHostname("NextionNS");
-
-  // automatically connect using saved credentials if they exist.
-  // If connection fails it starts an access point with the specified name
-  //### if (wifiMgr.autoConnect("Nextion_AP", "michi")) {
-  if (wifiMgr.autoConnect("Nextion_AP")) {
-    ConnectionDataOk = true;
-    wifiConnect();
-  }
-  else {
-    log_i("[WM] Configportal running... %s", wifiMgr.getConfigPortalSSID().c_str());  //### show AP and IP
-    ConnectionDataOk = false;
-    // was not connected before, so no need to call wifiDisconnect()
-    //### Inform Nextion
-  }
-
-  log_i("[ESP] Setup Done! Entering loop...");
+  log_d("[ESP] Setup Done! Entering loop...");
 }
 
 
 uint8_t payload[MAXLEN_COMPONENT_LIST+1+3+3] = {0}; // plus space for '\0', message-head and message-tail
 
 void loop() {
-  wifiMgr.process();
-
-
   if (NEX_readPayload(payload, MAXLEN_COMPONENT_LIST, 10)) {
-        NEX_handleMsg(payload);
+    NEX_handleMsg(payload);
   }   // Nextion Serial available
 
 
@@ -228,40 +240,21 @@ void loop() {
     } else
     {
       // on any input that is only one character do
-      if ((char)payload[0]=='B')   wifiMgr.reboot();      // reboot ESP
+      if ((char)payload[0]=='B')   {ESP.restart(); delay(1000);}      // restart ESP
       else
-      if ((char)payload[0]=='R')   NEX_sendCommand("rest", false);    // reboot Screen
-/* ### only for testing NEX_getInt()
-       else
-      if ((char)payload[0]=='T')   {
-        int32_t x = NEX_getInt("tch2");
-        log_d("### getInt returns %d", x);
-      }
- */
+      if ((char)payload[0]=='R')   NEX_sendCommand("rest", false);    // reset Screen
     }
   }   // ESP Serial available
 
 
   if (PG_upd.time.next()) {
     NTP_updTimeinfo();      // update NTP time structure to get current time
-    Page_updateTime();   // update time components on current page
+    Page_updateTime();      // update time components on current page
     PG_upd.time.storeCurrent();
   }
 
-  // Wifi status changed to connected and was successfully connected before
-  if (WiFi.status() == WL_CONNECTED && !PG_upd.wifi.curr.conn && ConnectionDataOk) {
-    wifiConnect();
-    PG_upd.wifi.curr.conn = 1;
-  }
-
-  // Wifi status changed from connected to disconnected
-  if (WiFi.status() != WL_CONNECTED && PG_upd.wifi.curr.conn) {
-    wifiDisconnect(1);
-    PG_upd.wifi.curr.conn = 0;
-  }
-
   if (PG_upd.wifi.next()) {
-    Page_updateWifi();
+    Page_updateWifi();  //### reset Wifi in the dis/connect event
     PG_upd.wifi.storeCurrent();
   }
 }   // loop()
