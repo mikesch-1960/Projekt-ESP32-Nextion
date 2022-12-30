@@ -19,4 +19,9 @@
     "git.enabled": true,
     "editor.tabSize": 2,
     "workbench.editor.enablePreview": false,
+    "files.associations": {
+      "sstream": "cpp",
+      "iostream": "cpp",
+      "cstring": "cpp"
+    },
 }

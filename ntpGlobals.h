@@ -8,7 +8,7 @@ NTP;
 
 //### used for testing purposes only
 /*
-  void tmpNTPsetTime(int yr, int month, int mday, int hr, int minute, int sec, int isDst){
+void tmpNTPsetTime(int yr, int month, int mday, int hr, int minute, int sec, int isDst){
   NTP.timeinfo.tm_year  = yr - 1900;    // Set date
   NTP.timeinfo.tm_mon   = month-1;
   NTP.timeinfo.tm_mday  = mday;

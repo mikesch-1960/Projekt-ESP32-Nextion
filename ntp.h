@@ -24,7 +24,7 @@ void NTP_updTimeinfo() {
 // format description: https://help.gnome.org/users/gthumb/unstable/gthumb-date-formats.html.de
 // or https://cplusplus.com/reference/ctime/strftime/
 // NOTE: NTP_updTimeinfo();  must be called before, to get the actual time!
-size_t NTP_asString(char fmt[], char res[], size_t resLen) {
+size_t NTP_asString(char fmt[], char res[], size_t resLen) {  // used in page.h
   strncpy(res, "?\0\0\0", resLen-1);
   size_t r = strftime(res, resLen-1, fmt, &NTP.timeinfo);
 

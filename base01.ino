@@ -17,8 +17,8 @@
   x LongTouch und swipe im ESP steuern
   v WifiManager entfernen und https://github.com/marvinroger/async-mqtt-client verwenden. Keine blockierender code, saubere Ereignisse, ...!
   v Das dimmen in der Startseite des Nextion funktioniert nicht
-  - implement %M mac address to _wifi format
-  - Häftiges testen der Konventionen zu den vom Nextion gesendeten Komponenten, das durch ein #define ein und aus geschaltet werden kann.
+  v implement M mac address to _wifi format
+  v Häftiges testen der Konventionen zu den vom Nextion gesendeten Komponenten, das durch ein #define ein und aus geschaltet werden kann.
   - Aus 'program.s' heraus eine Liste mit aktualisierbaren globalen Variablen(int) und/oder globalen Komponenten in Formularen senden, wie beim 'page init' Ereignis.
     Ideen dazu: comp_t hat zwei Zähler. Einen für die globalen, immer zu aktualisierenden Elemente und einen zweiten für die in der Seite zu aktualisierenden Komponenten. Dabei muss auf doppelte geachtet werden!
 
@@ -29,7 +29,7 @@
     !Ich gebe auf und bleibe dabei das Wischen in den einzelnen Seiten zu machen, da (zumindest bei meinem Nextion) kein Ereignis die Koordinaten beim loslassen sendet.
   v Im Display eine Fehlerseite einbauen, die der ESP verwenden kann um Fehler (z.B. beim 'page int' Ereignis) zu melden.
   - En-/Disable Buttons by setting Textcolor and checking that color on press/release event
-  - Das ganze System umstellen: Die Komponentennamen sind egal. Beim 'page init' muss der Komponentenname oder die Komponentenid(#23) angegeben werden. Danach der data-specifier (zusätzlich zu denen vom jetzigen wifi %d=Datum %t=Zeit %m=mqtt), dann der jetzige param.
+  v Das ganze System umstellen: Die Komponentennamen sind egal. Beim 'page init' muss der Komponentenname oder die Komponentenid(#23) angegeben werden. Danach der data-specifier (zusätzlich zu denen vom jetzigen wifi %d=Datum %t=Zeit %m=mqtt), dann der jetzige param.
       Vorteile: kürzere Komponentennamen möglich, standard Komponentennamen möglich, Unterscheidung von Zeit und Datum.
       t0.txt=d/%A %d.%m.%Y^p0.pic=Q[2,5]^n0.val=R/%d dBa^#12=t/%H:%M^ODTmp.txt=m.topicid/%1.1f °C^
 
@@ -58,9 +58,10 @@
       A Full Instruction Set (with hidden ones):    https://github.com/UNUF/nxt-doc/blob/main/Protocols/Full%20Instruction%20Set.md#readme
 
   . zum NSPanel von Sonoff
+      https://blakadder.com/nspanel-teardown/   Pins for relays NTC and buzzer and much more
       NSPanel specific IO-Pins: https://www.kickstarter.com/projects/sonoffnspanel/sonoff-nspanel-smart-scene-wall-switch/posts/3328417
         Pin   IO              Corresponding function
-         7    SENSOR_CAPN     NTC, temperature sensing
+         7    SENSOR_CAPN     NTC, Sonoff confirmed it is an NTC thermistor probe model MF52A R = 10K±1% B = 3950K±1%.
         16    GPIO27          KEY2
         17    MTMS            KEY1
         23    GPIO0           for flashing firmware
@@ -79,12 +80,11 @@
 // in vscode press F1: 'Arduino: Board Config' to change core debug level
 
 #define strHas(str, what)     (strstr(str, what)!=nullptr)
-#define strStart(str, with)   (strstr(str, with)==str)
 
 // ------------------------------------------------------------------------------------------------
 #pragma region  USER_SETTINGS
 
-// uncomment this to define the credentials in this file
+// uncomment this to define the credentials inside the else statement
 #define USE_CREDENTIALS_FILE
 
 #ifdef USE_CREDENTIALS_FILE
@@ -93,7 +93,7 @@
   #define WIFI_SSID         "YourSSID"
   #define WIFI_PWD          "YourPassword"
 
-  #define MQTT_HOST         IPAddress(192, 168, 79, 0)   // or hostname like "your.mqtt.hostname"
+  #define MQTT_HOST         IPAddress(192, 168, 8, 99)   // or hostname like "your.mqtt.hostname"
   #define MQTT_PORT         1883
   // If your broker requires authentication, uncomment the two lines below
   // #define MQTT_USER       ""
@@ -168,10 +168,11 @@ void WiFiEvent(WiFiEvent_t event)
     case SYSTEM_EVENT_STA_GOT_IP:
       log_i("  WiFi connected! IP address: %s", WiFi.localIP().toString().c_str());
       NTP_begin(NTP_SERVER, NTP_TIMEZONE);  // Connecting to NTP server
+      NTP_updTimeinfo();
       connectToMqtt();
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
-      Serial.println("WiFi lost connection");
+      Serial.println("WiFi lost connection!");
       xTimerStop(mqttReconnectTimer, 0); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
       xTimerStart(wifiReconnectTimer, 0);
       break;
@@ -248,13 +249,13 @@ void loop() {
 
 
   if (PG_upd.time.next()) {
-    NTP_updTimeinfo();      // update NTP time structure to get current time
+    NTP_updTimeinfo();
     Page_updateTime();      // update time components on current page
     PG_upd.time.storeCurrent();
   }
 
   if (PG_upd.wifi.next()) {
-    Page_updateWifi();  //### reset Wifi in the dis/connect event
+    Page_updateWifi();
     PG_upd.wifi.storeCurrent();
   }
 }   // loop()

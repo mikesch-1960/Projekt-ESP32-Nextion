@@ -79,7 +79,6 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse) {
     return resp[0] == 1;
   }
 
-  // log_d("none %s", waitResponse?"received!":"expected");
   return false;
 }   // NEX_sendCommand()
 
