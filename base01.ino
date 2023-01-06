@@ -3,7 +3,7 @@
   In dieser Version: -----
   v Kommunikation zwischen ESP und Display
   X Mit WifiManager
-  v AsyncMQTT_Generic Bibliothek verwendet statt WifiManager
+  v AsyncMQTT_Generic Bibliothek verwendet statt WifiManager - hab mich für eine andere AsyncMQTT library entschieden.
   v NTP server
   v Die im 'page init event' gemeldeten _timeXYZ Komponenten werden automatisch beim Minuten-/oder Sekundenwechsel aktualisiert, abhängig davon ob im Format in Sekunden Bezeichner enthalten ist.
   v Die im 'page init event' gemeldeten _wifiXYZ Komponenten werden automatisch aktualisiert
@@ -15,10 +15,13 @@
 
   Todos: -----
   x LongTouch und swipe im ESP steuern
-  v WifiManager entfernen und https://github.com/marvinroger/async-mqtt-client verwenden. Keine blockierender code, saubere Ereignisse, ...!
+  v WifiManager entfernen und https://github.com/marvinroger/async-mqtt-client verwenden. Kein blockierender code, saubere Ereignisse, ...!
   v Das dimmen in der Startseite des Nextion funktioniert nicht
   v implement M mac address to _wifi format
   v Häftiges testen der Konventionen zu den vom Nextion gesendeten Komponenten, das durch ein #define ein und aus geschaltet werden kann.
+  - MQTT Verbindung aus 'program.s' config lesen und dann setzen oder überschreiben.
+  - Datentypen für die Anzeige von MQTT IP(i)/Host(H), Port(P) und Verbindungsstatus(B)roker,
+    sowie ClientId(c)
   - Aus 'program.s' heraus eine Liste mit aktualisierbaren globalen Variablen(int) und/oder globalen Komponenten in Formularen senden, wie beim 'page init' Ereignis.
     Ideen dazu: comp_t hat zwei Zähler. Einen für die globalen, immer zu aktualisierenden Elemente und einen zweiten für die in der Seite zu aktualisierenden Komponenten. Dabei muss auf doppelte geachtet werden!
 
@@ -125,7 +128,10 @@ TimerHandle_t wifiReconnectTimer;
 
 // https://github.com/khoih-prog/AsyncMQTT_Generic
 // API reference: https://github.com/khoih-prog/AsyncMQTT_Generic/blob/main/docs/2.-API-reference.md
-#include <AsyncMqtt_Generic.h>
+//#### #include <AsyncMqtt_Generic.h>
+
+// https://github.com/marvinroger/async-mqtt-client
+#include <AsyncMqttClient.h>
 
 AsyncMqttClient mqttClient;
 
@@ -197,7 +203,7 @@ void setup() {
 
   log_i("\nStarting Nextion driver on '%s'", ARDUINO_BOARD);
 
-  NEX_begin(921600);    // use the fastest possible value! Must be set in the Nextion Editor in Program.s with same baudrate
+  NEX_begin(921600);    // use the fastest possible value! Must be set in the Nextion Editor in Program.s with same baudrate!
 
   mqttReconnectTimer =
     xTimerCreate("mqttTimer", pdMS_TO_TICKS(5000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
@@ -207,7 +213,10 @@ void setup() {
   WiFi.onEvent(WiFiEvent);
   connectToWifi();
 
-  mqttClient.onConnect(onMqttConnect);
+  mqttClient.setCleanSession(true);
+  mqttClient.setMaxTopicLength(200);
+
+  mqttClient.onConnect(onMqttConnected);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onSubscribe(onMqttSubscribe);
   mqttClient.onUnsubscribe(onMqttUnsubscribe);
@@ -217,13 +226,13 @@ void setup() {
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
 
   log_d("[ESP] Setup Done! Entering loop...");
-}
+}   // setup()
 
 
 uint8_t payload[MAXLEN_COMPONENT_LIST+1+3+3] = {0}; // plus space for '\0', message-head and message-tail
 
 void loop() {
-  if (NEX_readPayload(payload, MAXLEN_COMPONENT_LIST, 10)) {
+  if (NEX_readData(payload, MAXLEN_COMPONENT_LIST, 10)) {
     NEX_handleMsg(payload);
   }   // Nextion Serial available
 
@@ -237,13 +246,13 @@ void loop() {
     if (len > 2) {   // send ESP message as command to nextion
       payload[len] = '\0';
       while (len > 0 && (uint8_t)payload[len] <= 0x20)     payload[len--] = '\0';   // remove linebreaks and spaces from the end
-      NEX_sendCommand((const char *)payload, 200);
+      NEX_sendCommand((const char *)payload);
     } else
     {
       // on any input that is only one character do
       if ((char)payload[0]=='B')   {ESP.restart(); delay(1000);}      // restart ESP
       else
-      if ((char)payload[0]=='R')   NEX_sendCommand("rest", false);    // reset Screen
+      if ((char)payload[0]=='R')   NEX_sendCommand("rest");    // reset Screen
     }
   }   // ESP Serial available
 

@@ -1,6 +1,6 @@
 /*
 v check for MAX_COMPONENT_ITEMS  or  set MAX_COMPONENT_ITEMS dynamic
-- sync seconds at the first call of update_time() to a change of seconds
+x sync seconds at the first call of update_time() to a change of seconds
 v NEX_cfg.fmtTime[0] must exist for nullptr format strings
 - build a format string for empty strings similar to boolean format strings
   OR: use boolean format strings for this porposes in a other way
@@ -36,8 +36,8 @@ v NEX_cfg.fmtTime[0] must exist for nullptr format strings
 
   group mqtt: (Updated when a mqtt message was received for that topic)
     # for MQTT. Must have a topic behind the # specifier.
-    ### not implemented yet. Needs more exact description!
-    nam1.txt=#0_userdata/example=%s^nam2.val=#./data=%d^nam3.val=#../data=%d^
+    Needs more exact description!
+    nam1.txt=#0_userdata/example=%s^nam2.val=#/data=%d^
 **---------------------------------------------------------------------------------------*/
 
 #define NOT_APPLIED   255
@@ -92,18 +92,20 @@ struct __attribute__ ((packed)) comp_t {    // one packed struct for every token
   char  cType   = '\0';     // type of data the component should show
 
   union {
-    struct __attribute__ ((packed)) {     // for data types that can have an index(s) or range(s to e)
+    struct __attribute__ ((packed)) {     // for wifi data types that can have an index(s) or range(s to e)
       uint8_t s;     // the index or the range start
       uint8_t e;     // the range end
     };
-    struct __attribute__ ((packed)) {     // for data types time and MQTT
-      char timeUpdPeriod;   // d-ay, m-inute, s-econd; only for data type T-ime; T cant have index or range!
-      //### not used for now
-      uint8_t topicOffset;  // offset from the ptrName to the topic of a MQTT data type component ( char* ptrTopic = comp.ptrName+(size_t)comp.topicOffset )
-    };
-    struct __attribute__ ((packed)) {     // for data type C with a boolean format
+    struct __attribute__ ((packed)) {     // for wifi data type C with a boolean format
       // The ':' in the boolean format string will be replaced by \0 and the offset points to the text behind that
       uint8_t falseOffset;
+    };
+    struct __attribute__ ((packed)) {     // for time data types time
+      char timeUpdPeriod;   // d-ay, m-inute, s-econd; only for data type T-ime; T cant have index or range!
+    };
+    struct __attribute__ ((packed)) {     // for mqtt data types
+      uint8_t topicOffset;   // offset from the ptrName to the topic of a MQTT data type component ( char* ptrTopic = comp.ptrName+(size_t)comp.topicOffset )
+      uint8_t fullTopicIdx;  // For components with a relative topic: The index of component with the absolute topic to use for
     };
   };
 };    // struct comp_t
@@ -119,8 +121,8 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
 
   // These values are calculated at the end of splitCompStr()
   // int timeStartIdx = 0;  // because of the sort order of the components, this is allways 0!
-  int wifiStartIdx;
-  int mqttStartIdx;
+  int     wifiStartIdx;                       // Index of the first wifi component in the ordered component list
+  int     mqttStartIdx;                       // Index of the first mqtt component in the ordered component list
 
   /*
     This enum determines the sort order of the components. The sort order is very important because the update
@@ -129,20 +131,20 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
   */
   enum DataGroup { grTIME, grWIFI_DYN, grWIFI_FIX, grMQTT };
 
+  // Used for sorting the componentlist by data type groups
   DataGroup getDataTypeGroup(comp_t* comp) {
     const char t = comp->cType;
-    return t==DT_TIME ? grTIME : (t==DT_MQTT ? grMQTT : (strchr(RANGE_TYPES, t) ? grWIFI_DYN : grWIFI_FIX) );
+    return t==DT_TIME ? grTIME : (t==DT_MQTT ? grMQTT : (strchr(FIXED_WIFI_TYPES, t) ? grWIFI_FIX : grWIFI_DYN) );
   }
+
 
   void reset() {
     memset(compStr, 0, MAXLEN_COMPONENT_LIST);
     time.reset();
     wifi.reset();
     compCount = 0;
-    // loops will stop if these values are unchanged, what will happen if no components of this group exist
-    wifiStartIdx = MAX_COMPONENT_ITEMS;
-    mqttStartIdx = MAX_COMPONENT_ITEMS;
   }
+
 
   // writes the componentname to the buffer 'name' and expandes the extension if necessary
   void getCompFullname(const comp_t* comp, char* name) {
@@ -164,6 +166,15 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
     return comp->ptrFmt && comp->ptrFmt[0]=='?';
   }
 
+
+  char* getBooltextPtr(const comp_t* comp, int val) {
+    if (val)
+      return comp->ptrFmt + 1;
+    else
+      return comp->ptrFmt + (size_t)comp->falseOffset;
+  }
+
+
   // returns the index to the buffer with defined format macros, or -1 if comp do not have a format macro
   int isFmtMacro(const comp_t* comp) {
     if (comp->ptrFmt && comp->ptrFmt[0]=='$' && strlen(comp->ptrFmt)>1) {
@@ -173,50 +184,53 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
   }
 
 
-  char* getBooltextPtr(const comp_t* comp, int val) {
-    if (val)
-      return comp->ptrFmt + 1;
-    else
-      return comp->ptrFmt + (size_t)comp->falseOffset;
+  bool topicEqual(const int compIdx, char* searchTopic, char* topicBuffer) {
+    readAbsoluteTopic(compIdx, topicBuffer);
+    return topicBuffer && strcmp(topicBuffer, searchTopic) == 0;
   }
+
+
+  void readAbsoluteTopic(const int compIdx, char* topicBuff) {
+    topicBuff[0] = '\0';
+    char* compTopic = compList[compIdx].ptrName + compList[compIdx].topicOffset;
+
+    if (compTopic[0] == '/') {    // a other topic at the same level as a previous full topic in a component before the current
+      int idx = compIdx-1;
+
+      // if the fullTopicIdx allready known, use it to go directly to the component with the corresponding absolute topic
+      if (compList[compIdx].fullTopicIdx < MAX_COMPONENT_ITEMS){
+        idx = compList[compIdx].fullTopicIdx;
+//log_v("### readAbsoluteTopic: use abs idx %d for comp %s", idx, compList[compIdx].ptrName);
+      }
+
+      // for (int idx=compIdx-1; idx >= mqttStartIdx; idx--) {
+      for (idx; idx >= mqttStartIdx; idx--) {
+        if ((compList[idx].ptrName + compList[idx].topicOffset)[0] != '/') {    // is it the corresponding absolute topic?
+          if (compList[compIdx].fullTopicIdx == MAX_COMPONENT_ITEMS) {
+            compList[compIdx].fullTopicIdx = idx; // store the corresponding absolute topic to use it directly next time
+//log_v("### readAbsoluteTopic: store abs idx %d for comp %s", idx, compList[compIdx].ptrName);
+          }
+
+          strncpy(topicBuff, (compList[idx].ptrName + compList[idx].topicOffset), 256);   // copy the absolute topic to the result buffer
+
+          char* prevLevel = strrchr(topicBuff, '/');    // find the last backslash in the result
+          if (prevLevel)
+            // exchange the last part of the absolute topic by the relative topic of the current component
+            strncpy(prevLevel, compTopic, 256-strlen(topicBuff));
+
+//log_v("---### comp=%s  topic=%s", compList[compIdx].ptrName, topicBuff);
+
+          break;   // exit the loop
+        }
+      }
+    } else {
+      strncpy(topicBuff, compTopic, 256);
+    }
+//log_v("    get full topic from %s is '%s'", compList[compIdx].ptrName, topic);
+  }   // readAbsoluteTopic()
+
 
   // -----------------------------------------------------------------
-/*###   struct {    // time struct - for components of data types T
-    const unsigned long INTERVAL = 1000;    // DO NOT CHANGE!
-    tm* timeinfo  = &NTP.timeinfo;
-
-    struct {
-      unsigned long loopMs = 0;
-      int min   = 9999;
-      int day   = 9999;
-    }
-    last;
-
-    bool newMin()  { return (timeinfo->tm_min  != last.min); }
-    bool newDay()  { return (timeinfo->tm_mday  != last.day); }
-
-    void reset() {
-      last.loopMs  = 0;
-      last.min     = 9999;
-      last.day     = 9999;
-    }
-    bool fresh() { return last.min == 9999; }
-
-    void storeCurrent() {
-      if (last.loopMs > 0)
-        last.loopMs += INTERVAL;    // for _time, we are going exatly 1000ms from the last
-      else {
-        last.loopMs = millis() + INTERVAL;   // only for the first call we are using millis() as the base
-      }
-      last.min = timeinfo->tm_min;
-      last.day = timeinfo->tm_mday;
-    }
-    bool next() {
-      return (millis() > last.loopMs || fresh());
-    }
-  }
-  time;
- */
   struct {    // time struct - for components of data types T
     tm* timeinfo  = &NTP.timeinfo;
 
@@ -284,8 +298,8 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
     curr;
 
     bool newConn()  { return (curr.conn != last.conn); }
-    //### bool newRSSI()  { return (curr.rssi > last.rssi+5) || (curr.rssi < last.rssi-5); }  // differet to last +-5
-    bool newRSSI()  { return curr.rssi != last.rssi; }
+    bool newRSSI()  { return (curr.rssi > last.rssi+5) || (curr.rssi < last.rssi-5); }  // differet to last +-5
+    //bool newRSSI()  { return curr.rssi != last.rssi; }
 
     void reset() {
       last.loopMs  = 0;
@@ -363,7 +377,7 @@ bool handleTypeExtras(comp_t* comp, char* ptrType) {
   }
 
   if (comp->cType == DT_MQTT) {   // is the data type 'MQTT'?
-    comp->topicOffset = (uint8_t)(ptrType - comp->ptrName);
+    comp->topicOffset = (uint8_t)(ptrType - comp->ptrName + 1);   // with this offset ptrName+topicOffset points to the topic
 
 #ifdef VALIDATE_PI_MSG
     // test if a topic is specified
@@ -481,11 +495,11 @@ bool handleTypeExtras(comp_t* comp, char* ptrType) {
   To sort the componentlist, the data types are grouped.
   First all time components, then the WLAN components that change during an existing WLAN connection.
   Followed by the WLAN components that do not change during an existing WLAN connection and finally
-  the MQTT components. (The order of the components depends on the enum DataGroup!)
+  the MQTT components. (The order of the components is determined by enum DataGroup!)
   The function is called as a callback for the qsort() at the end of the splitCompStr() function.
 */
 int compareByType(const void *elem1, const void *elem2) {
-  return PG_upd.getDataTypeGroup((comp_t*)elem1) >= PG_upd.getDataTypeGroup((comp_t*)elem2) ? 1 : -1;
+  return PG_upd.getDataTypeGroup((comp_t*)elem1) > PG_upd.getDataTypeGroup((comp_t*)elem2) ? 1 : -1;
 }
 
 
@@ -634,12 +648,18 @@ void splitCompStr() {
   PG_upd.wifiStartIdx = MAX_COMPONENT_ITEMS;
   PG_upd.mqttStartIdx = MAX_COMPONENT_ITEMS;
 
+  // Because of the sort order, we can find the starting index for each group. Time components start at 0!
   for (int i=0; i<PG_upd.compCount; i++) {
-    if (PG_upd.wifiStartIdx == MAX_COMPONENT_ITEMS && PG_upd.compList[i].cType != DT_TIME && PG_upd.compList[i].cType != DT_MQTT) {
+    if (PG_upd.wifiStartIdx == MAX_COMPONENT_ITEMS &&
+        PG_upd.compList[i].cType != DT_TIME &&
+        PG_upd.compList[i].cType != DT_MQTT
+    ) {   // must be a wifi component
       PG_upd.wifiStartIdx = i;
     }
 
-    if (PG_upd.mqttStartIdx == MAX_COMPONENT_ITEMS && PG_upd.compList[i].cType != DT_TIME && PG_upd.compList[i].cType != DT_MQTT) {
+    if (PG_upd.mqttStartIdx == MAX_COMPONENT_ITEMS &&
+        PG_upd.compList[i].cType == DT_MQTT
+    ) {
       PG_upd.mqttStartIdx = i;
       break;
     }
@@ -698,10 +718,12 @@ void Page_init(char* pgComplist) {
   strncpy(PG_upd.compStr, pgComplist, MAXLEN_COMPONENT_LIST);
 
   splitCompStr();
+  subscribePage();
 };    // Page_init()
 
 
 void Page_exit() {
+  unsubscribePage();
   PG_upd.reset();
   log_i("[nexPG] Page exit");
 };    // Page_exit()
@@ -742,7 +764,7 @@ void Page_updateTime() {
       if (isTxt) strcat(buff, "\"");
 
       // send the command to the Nextion
-      NEX_sendCommand(buff, false);
+      NEX_sendCommand(buff);
     }
 
     idx++;
@@ -878,8 +900,40 @@ void Page_updateWifi() {
     if (isTxt) strcat(buff, "\"");
 
     // send the command to the Nextion
-    NEX_sendCommand(buff, false);
+    NEX_sendCommand(buff);
 
     idx++;
   }   // while( wifi-component )
 }   // Page_updateWifi()
+
+
+// called from onMqttMessage() with received topic and payload
+void Page_updateMQTT(char* topic, char* payload, const size_t& len) {
+  // name...="value..."\0
+  char buff[NEX_MAX_NAMELEN + 2 + NEX_MAX_TEXTLEN + 2] = {0}; // buffer for the command to set the value of the component
+  char compTopic[256] = {0};    //### can we use the buffer above (check the size by MAX(buffer or topic size))
+
+  // Find all components with the given topic
+  for (int idx = PG_upd.mqttStartIdx; idx < PG_upd.compCount; idx++) {
+    if (PG_upd.topicEqual(idx, topic, compTopic)) {
+      const comp_t* comp = &PG_upd.compList[idx];
+
+      PG_upd.getCompFullname(comp, buff);
+      bool isTxt = strstr(buff, ".txt");
+      strcat(buff, "=");
+      if (isTxt) strcat(buff, "\"");    // if component is text type, sourond the value by '"'
+
+      //### define a format string depending on the component- and the payloadtype
+      //### sprintf(buff+strlen(buff), comp->ptrFmt, payload);
+      // sprintf(buff+strlen(buff), "%s", payload);
+      size_t bp = strlen(buff);
+      strncpy(buff+bp, payload, len);
+      (buff+bp+len)[0] = '\0';
+
+      if (isTxt) strcat(buff, "\"");
+
+      // send the command to the Nextion
+      NEX_sendCommand(buff);
+    }    // if (topicEqual)
+  }    // for (int idx
+}    // Page_updateMQTT()

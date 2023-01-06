@@ -3,7 +3,12 @@
 #include "nexGlobals.h"
 
 // forward deklarations
-bool NEX_sendCommand(const char* cmd, bool waitResponse);
+//void NEX_sendCommand(const char* cmd);
+bool NEX_sendCommand(const char* cmd, bool waitResponse=false);
+
+// from mqtt.h
+void subscribePage();
+void unsubscribePage();
 
 #include "page.h"
 
@@ -12,9 +17,9 @@ void NEX_begin(uint baudrate) {
   log_i("[NEX] begin...");
   Serial2.begin(baudrate, SERIAL_8N1, NEX_SER_RX, NEX_SER_TX);
 
-  NEX_sendCommand("", false);        // send empty command
+  NEX_sendCommand("");        // send empty command
   // Restart the nextion, which will run the Program.s part of the HMI file.
-  NEX_sendCommand("rest", false);    // Restart the screen
+  NEX_sendCommand("rest");    // Restart the screen
 }   // init()
 
 
@@ -26,7 +31,7 @@ int32_t hmiIntToInt32(byte arr[], uint8_t start) {
 
 
 // Read data from the nextion display if available
-bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
+bool NEX_readData(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
   uint8_t buff[1];
   int cntBytes = 0, cntFF = 0;
   uint64_t msStart = millis() + timeout;
@@ -65,6 +70,14 @@ bool NEX_readPayload(uint8_t payload[], uint64_t buffLen, uint64_t timeout) {
 }   // NEX_readPayload()
 
 
+// void NEX_sendCommand(const char* cmd) {
+//   log_d("[NEX] Send '%s'", cmd);
+
+//   Serial2.print(cmd);
+//   Serial2.write(0xFF);
+//   Serial2.write(0xFF);
+//   Serial2.write(0xFF);
+// }   // NEX_sendCommand()
 bool NEX_sendCommand(const char* cmd, bool waitResponse) {
   log_d("[NEX] Send '%s'", cmd);
 
@@ -74,7 +87,7 @@ bool NEX_sendCommand(const char* cmd, bool waitResponse) {
   Serial2.write(0xFF);
 
   uint8_t resp[11];
-  if (waitResponse && NEX_readPayload(resp, 100, NEX_CmdRespTimeout)) {
+  if (waitResponse && NEX_readData(resp, 100, NEX_CmdRespTimeout)) {
     log_d("cmd '%s' %s(%X)", cmd, resp[0] == 1 ? "OK" : "failed", resp[0]);
     return resp[0] == 1;
   }
@@ -91,7 +104,7 @@ int32_t NEX_getInt(char* varname) {
 
   // send the command to get the value of the variable
   sprintf(buff, "get %s", varname);
-  NEX_sendCommand(buff, true);
+  NEX_sendCommand(buff);
 
   memset(buff, 0, len);   // clear to reuse
 

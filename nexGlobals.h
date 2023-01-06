@@ -21,7 +21,7 @@
 #define MAX_FMT_MACROS    4       // number of format macros
 
 // Values collected in 'screen init' message that is fired from Program.s code of the HMI-file
-struct NEX_cfg_t {//### other name
+struct NEX_cfg_t {
   int32_t standbyDelay;
   int32_t longTouchTime;
   char    fmtTime[MAX_FMT_MACROS][MAX_FMTPARAM_LEN];    // up to MAX_FMT_MACROS format macros can be configured from 'screen init event'
