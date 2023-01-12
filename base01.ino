@@ -19,11 +19,16 @@
   v Das dimmen in der Startseite des Nextion funktioniert nicht
   v implement M mac address to _wifi format
   v Häftiges testen der Konventionen zu den vom Nextion gesendeten Komponenten, das durch ein #define ein und aus geschaltet werden kann.
+  v Manche MQTT payloads kommen in mehreren Teilen an!
   - MQTT Verbindung aus 'program.s' config lesen und dann setzen oder überschreiben.
+  - NTP Verbindung aus 'program.s' config lesen und dann setzen oder überschreiben.
   - Datentypen für die Anzeige von MQTT IP(i)/Host(H), Port(P) und Verbindungsstatus(B)roker,
     sowie ClientId(c)
   - Aus 'program.s' heraus eine Liste mit aktualisierbaren globalen Variablen(int) und/oder globalen Komponenten in Formularen senden, wie beim 'page init' Ereignis.
     Ideen dazu: comp_t hat zwei Zähler. Einen für die globalen, immer zu aktualisierenden Elemente und einen zweiten für die in der Seite zu aktualisierenden Komponenten. Dabei muss auf doppelte geachtet werden!
+
+  Probleme: -----
+
 
   Ideen: -----
   x Im Screen sendxy aktivieren und hier die dadurch gesendeten touch Ereignisse für longPress und swipe auswerten.
@@ -35,6 +40,8 @@
   v Das ganze System umstellen: Die Komponentennamen sind egal. Beim 'page init' muss der Komponentenname oder die Komponentenid(#23) angegeben werden. Danach der data-specifier (zusätzlich zu denen vom jetzigen wifi %d=Datum %t=Zeit %m=mqtt), dann der jetzige param.
       Vorteile: kürzere Komponentennamen möglich, standard Komponentennamen möglich, Unterscheidung von Zeit und Datum.
       t0.txt=d/%A %d.%m.%Y^p0.pic=Q[2,5]^n0.val=R/%d dBa^#12=t/%H:%M^ODTmp.txt=m.topicid/%1.1f °C^
+  - range auch für mqtt adn T-ime Komponenten ermögliche. Idee kam, weil über AccuWeather eine Icon Nummer gesetzt wird und diese in einer Picture Komponete dargestellt werden kann. Dazu muss allerdings die Zahl der vorgerigen resourcen in den Bildern hinzu addiert werden.
+  - Weitere spezielle Fomate außer boolean (Berechnung, Bereich, WortZuWertOderText)
 
   Interessante Infos
   . zu WiFI:

@@ -92,6 +92,8 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
   // log_i("Disconnected from MQTT.");
   Serial.printf("Disconnected from MQTT: %u\n", static_cast<std::underlying_type<AsyncMqttClientDisconnectReason>::type>(reason));
 
+  unsubscribePage();
+
   if (WiFi.isConnected()) {
     xTimerStart(mqttReconnectTimer, 0);
   }
@@ -115,11 +117,12 @@ void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessagePrope
                    const size_t& len, const size_t& index, const size_t& total)
 {
   /*
-    NOTE: The payload buffer is not terminated by null character and is only then size of the len parameter.
-    So `payload[len] = '\0';` will set a the value behind the buffer!
+    NOTE: The payload buffer is NOT terminated by null character and is only the size of the len parameter.
+    So `payload[len] = '\0';` will set a the value outside the buffer!
+    Also, payload seams to be UTF8 encoded!
   */
-  log_d("[MQTT] ***** message received.  Topic:'%s' payload-len=%lu\n\tqos%d, dup=%d, retain=%d, index=%lu, total=%lu",
-      topic, len, properties.qos, properties.dup, properties.retain, index, total);
+  log_d("[MQTT] ***** message received.  Topic:'%s' payload-len=%lu append=%d\n\tqos%d, dup=%d, retain=%d, index=%lu, total=%lu",
+      topic, len, (index>0), properties.qos, properties.dup, properties.retain, index, total);
 
   char plmsg[2000] = {0};
   bool chr = false;
@@ -142,5 +145,7 @@ void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessagePrope
   }
   log_d("  payload:%s%s", plmsg, chr ? "'" : " ");
 
-  Page_updateMQTT(topic, payload, len);
+
+  // all payloads seams to be in string UTF-8 format or UTF-16?
+  Page_updateMQTT(topic, payload, len, index>0);
 }   // onMqttMessage()

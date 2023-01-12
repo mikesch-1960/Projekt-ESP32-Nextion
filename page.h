@@ -200,7 +200,6 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
       // if the fullTopicIdx allready known, use it to go directly to the component with the corresponding absolute topic
       if (compList[compIdx].fullTopicIdx < MAX_COMPONENT_ITEMS){
         idx = compList[compIdx].fullTopicIdx;
-//log_v("### readAbsoluteTopic: use abs idx %d for comp %s", idx, compList[compIdx].ptrName);
       }
 
       // for (int idx=compIdx-1; idx >= mqttStartIdx; idx--) {
@@ -208,25 +207,21 @@ struct {    // PG_upd struct for holding nesessery informations about the curren
         if ((compList[idx].ptrName + compList[idx].topicOffset)[0] != '/') {    // is it the corresponding absolute topic?
           if (compList[compIdx].fullTopicIdx == MAX_COMPONENT_ITEMS) {
             compList[compIdx].fullTopicIdx = idx; // store the corresponding absolute topic to use it directly next time
-//log_v("### readAbsoluteTopic: store abs idx %d for comp %s", idx, compList[compIdx].ptrName);
           }
 
           strncpy(topicBuff, (compList[idx].ptrName + compList[idx].topicOffset), 256);   // copy the absolute topic to the result buffer
 
           char* prevLevel = strrchr(topicBuff, '/');    // find the last backslash in the result
-          if (prevLevel)
+          if (prevLevel) {
             // exchange the last part of the absolute topic by the relative topic of the current component
             strncpy(prevLevel, compTopic, 256-strlen(topicBuff));
-
-//log_v("---### comp=%s  topic=%s", compList[compIdx].ptrName, topicBuff);
-
+          }
           break;   // exit the loop
         }
       }
     } else {
       strncpy(topicBuff, compTopic, 256);
     }
-//log_v("    get full topic from %s is '%s'", compList[compIdx].ptrName, topic);
   }   // readAbsoluteTopic()
 
 
@@ -908,7 +903,7 @@ void Page_updateWifi() {
 
 
 // called from onMqttMessage() with received topic and payload
-void Page_updateMQTT(char* topic, char* payload, const size_t& len) {
+void Page_updateMQTT(char* topic, char* payload, const size_t& len, bool append=false) {
   // name...="value..."\0
   char buff[NEX_MAX_NAMELEN + 2 + NEX_MAX_TEXTLEN + 2] = {0}; // buffer for the command to set the value of the component
   char compTopic[256] = {0};    //### can we use the buffer above (check the size by MAX(buffer or topic size))
@@ -920,15 +915,25 @@ void Page_updateMQTT(char* topic, char* payload, const size_t& len) {
 
       PG_upd.getCompFullname(comp, buff);
       bool isTxt = strstr(buff, ".txt");
+//### at the moment we can only use text components! Else we have to convert text to numeric to assign them
+if (!isTxt) {
+  log_w("In this version, we can only use text components for MQTT data! Component %s is not and is ignored!");
+  return;
+}
+      if (append) strcat(buff, "+");
       strcat(buff, "=");
       if (isTxt) strcat(buff, "\"");    // if component is text type, sourond the value by '"'
 
+      char defFmt[3] = "%s";
+      // if comp->ptrFmt is null or empty, use a default format
+      char* fmt = (!comp->ptrFmt || strlen(comp->ptrFmt)==0) ? &defFmt[0] : comp->ptrFmt;
+
       //### define a format string depending on the component- and the payloadtype
-      //### sprintf(buff+strlen(buff), comp->ptrFmt, payload);
-      // sprintf(buff+strlen(buff), "%s", payload);
-      size_t bp = strlen(buff);
-      strncpy(buff+bp, payload, len);
-      (buff+bp+len)[0] = '\0';
+      //#### thats not made very good and clear!
+      strncpy(compTopic, payload, len);
+      compTopic[len] = '\0';
+      //### int snprintf ( char * s, size_t n, const char * format, ... );
+      sprintf(buff+strlen(buff), fmt, compTopic);
 
       if (isTxt) strcat(buff, "\"");
 

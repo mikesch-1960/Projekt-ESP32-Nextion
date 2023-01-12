@@ -282,6 +282,19 @@ void NEX_handleMsg(uint8_t payload[]) {
               }
               break;
             }
+          case '4': {  // write the message to the console in HEX format
+              payload[cntBytes-3] = '\0';     // remove message tail
+              dta = (char*)payload + 4;       // skip header
+
+              log_i("\nloging testmessage in hex:");
+              for (int x=0; x<strlen(dta); x++) {
+                Serial.printf(" %02X,", (uint8_t)dta[x]);
+              }
+              Serial.println();
+              Serial.printf(" as text: '%s'\n", dta);
+              log_i("loging testmessage done!\n");
+              break;
+            }
           default:
             log_d("[NEX]### Unhandled temporary test id '%s'", payload);
         }
